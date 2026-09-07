@@ -1,0 +1,11 @@
+node_modules/
+.turbo/
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# foundry
+apps/contracts/out/
+apps/contracts/cache/
+apps/contracts/broadcast/

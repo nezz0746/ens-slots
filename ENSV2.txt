@@ -1,0 +1,523 @@
+ENSv2 — WORKING REFERENCE FOR ens-slots
+=======================================
+
+A digest of the ENSv2 documentation, kept in-repo so this project can be read
+without a browser. Source: https://docs.ens.domains/ensv2/
+
+Everything here is what the DOCS say, except the section headed VERIFIED
+AGAINST THE DEPLOYMENT, which is what the deployed bytecode actually does.
+Where the two disagree, the bytecode wins and the difference is recorded.
+
+The ENS docs carry a standing warning on every page: "The contracts and
+interfaces described here are not yet final and may change prior to mainnet
+deployment." Treat every signature below as provisional and re-run the fork
+test before trusting it.
+
+
+-------------------------------------------------------------------------------
+1. DEPLOYMENT — SEPOLIA, ETHOnline 2026 HACKATHON
+-------------------------------------------------------------------------------
+
+This is a DEDICATED hackathon deployment, separate from the standard ENSv2 Beta
+deployment that also lives on Sepolia. Names registered against one are
+invisible to the other. Its own ENS App and ENS Explorer serve it exclusively.
+
+For resolution to reach this deployment, the Universal Resolver built into viem
+and ethers must be overridden once, with UpgradableUniversalResolverProxy:
+
+    import { createPublicClient, http } from 'viem'
+    import { sepolia } from 'viem/chains'
+
+    const hackathonSepolia = {
+      ...sepolia,
+      contracts: {
+        ...sepolia.contracts,
+        ensUniversalResolver: {
+          address: '0xd26f2040d083af1cd2962ba303f4bea0c4faf142',
+        },
+      },
+    } as const
+
+    const client = createPublicClient({ chain: hackathonSepolia, transport: http() })
+
+    // getEnsAddress, getEnsName, getEnsText now resolve against the hackathon
+    // deployment.
+
+Ethers >= 6.17 takes the same override.
+
+  Contract                          Address
+  --------------------------------  ------------------------------------------
+  BatchRegistrar                    0xc8efa80d9f645b26bacd1bae8638492df3bae8ca
+  ContractNamer                     0x21a2b577709727119f1901314e0ba0150eafa15e
+  DefaultReverseRegistrarAdapter    0x0a8d7ed4061548fb3cb192d0cbe9e1a57b3b1ae9
+  DNSAliasResolver                  0x005a3bf1d92ebe4b1e1641a0c6fa49f38e1762a6
+  DNSSECGatewayProvider             0xfedb5c2fea17cef8547d534c3125f7601d3e30bd
+  DNSTLDResolver                    0x10107255fda20ab6c37a0efca1e9465f25066a00
+  DNSTXTResolver                    0x0ebc944ac29f91cc24ee507a2d46aa4901bbc748
+  ENSV1Resolver                     0x1f11e5b8bca2ccfe13bd8431853db159c4e9849c
+  ENSV2Resolver                     0xb1b2d8c4d4886d0d567b6a6b8a4b885229fafae4
+  ETHRegistrar                      0x7d1b7f586a62ac3f54b9a396849757814283270b
+  ETHRegistry                       0x1d78834d97c1d7b1a38c1dedbd1a287cfed3971e
+  ETHRenewerV1                      0x47bc0ab8f87db01383255e564cce92956ecc7c70
+  Graveyard                         0x2c29661b216717650ba6d4836b2bd37a0fe19adb
+  HCAOwnerAndSessionValidator       0xeb099163a41912a94e56b2143feb6eb7979a51f0
+  HCAUpgradeSet                     0xde59f9285edbe391fc32d3cba8909ea047cc0fc3
+  LabelStore                        0xd7351f76866123a7e49381f38a30a96adba7e855
+  LockedMigrationController         0x7fa65c83dd80cca2fbd91e16a6dc4f66b64efe22
+  ManagedUniversalResolverProxy     0x1abed09f1f36383f27cf0b3a5e0ea1738e1fd921
+  MigrationHelper                   0x540f222a6fd9a54e77989556f366940d1ad81aec
+  MockDAI                           0x93403a98c3a6be906585cd0d68447c0fc600fb38
+  MockRegistrationIntentExecutor    0x9675de20abf0216d07e3f5782dd92d0c7d3bb2cb
+  MockUSDC                          0xcbfd80f74375c54e545af34788ff465f96f66f05
+  PermissionedResolverImpl          0xa9d3814ab151bf6e37a427432795371a8361614e
+  PublicResolverSet                 0x3866e84b54a78d1e3778421e0fbf3607fa9c402f
+  PublicResolverV2                  0xf9de4979ddb290baf5b760d0e788125017bc33f6
+  RegistryUpgradeSet                0x658c43979721b6d30d173ea09622f2475761b382
+  ReverseRegistrarAdapter           0x67ee68067c74cb3ab595fb793860f98c8a0283f7
+  RootBatchRegistrar                0x9b30da91c1a3fb972d5a7d102390598d5ca70376
+  RootRegistry                      0xe7f0d5724f8337e3aa9a9910540341ff4273fed9
+  StandaloneHCAFactory              0xb85152a8ef4db5caf37af6bffce66b559a9c0b58
+  StandaloneHCAImplementation       0x7328a1926b45f0339913ab654fb98d1a0f5ec894
+  StandardRentPriceOracle           0xfeba6589b5c1b35875c0389ccedf83148b6ee71b
+  TestnetV1PremigrationRegistrar    0x1a8c627dc167bcf6b991e9d6e0a76e2dfab7ee88
+  UniversalHelper                   0x1d4cd7545d456f3b6a7e4380182279afcfa887b6
+  UniversalResolverV2               0xfea8d4b7fcce0b8765c793d6695eac384aaa458f
+  UnlockedMigrationController       0x97494264ad5437611cc2f43987c21f6f352d786a
+  UpgradableUniversalResolverProxy  0xd26f2040d083af1cd2962ba303f4bea0c4faf142
+  UserRegistryImpl                  0x47b442d0cf617c41cabaff5f02f44dd1e5f72546
+  VerifiableFactory                 0x894bc9cc8ff1ad96b8a288c86a8c71d662c07780
+  WrapperRegistryImpl               0x7c53b9dcef516662e9e8a229448cac30b90673cd
+
+The subset this project uses is mirrored, checksummed, in
+apps/contracts/src/Addresses.sol alongside the 0xSlots addresses.
+
+
+-------------------------------------------------------------------------------
+2. VERIFIED AGAINST THE DEPLOYMENT
+-------------------------------------------------------------------------------
+
+Established by disassembling the dispatch table of UserRegistryImpl at
+0x47b442d0cf617c41cabaff5f02f44dd1e5f72546 and by running
+apps/contracts/test/ForkSepolia.t.sol against a Sepolia fork.
+
+  CONFIRMED PRESENT — these signatures are exactly as documented:
+
+    register(string,address,address,address,uint256,uint64)  0x85f3e643
+    unregister(uint256)                                      0xa02b161e
+    renew(uint256,uint64)                                    0x5569f33d
+    setResolver(uint256,address)                             0xbc7b6d62
+    setSubregistry(uint256,address)                          0x341ec559
+    setParent(address,string)                                0x5357263f
+    getParent()                                              0x80f76021
+    getState(uint256)                                        0x44c9af28
+    getStatus(uint256)                                       0x5c622a0e
+    getExpiry(uint256)                                       0x13c72608
+    getTokenId(uint256)                                      0x14ff5ea3
+    getResource(uint256)                                     0x1e8fca2d
+    getResolver(string)                                      0xe4ae7d77
+    getSubregistry(string)                                   0x35af6216
+    findOwner(string)                                        0x63560a8e
+    findExpiry(string)                                       0x6f537c72
+    findTokenId(string)                                      0x91b3c037
+    ownerOf(uint256)                                         0x6352211e
+    latestOwnerOf(uint256)                                   0xbd242bcb
+    grantRoles(uint256,uint256,address)                      0x7c300586
+    grantRootRoles(uint256,address)                          0x072d5d77
+    revokeRootRoles(uint256,address)                         0xce156e82
+    hasRoles(uint256,uint256,address)                        0xd3bf89b1
+    hasRootRoles(uint256,address)                            0x781ef8db
+    roles(uint256,address)                                   0x5adf4724
+    roleCount(uint256)                                       0x2f27fa24
+    setURI(string,address)                                   0x48688f95
+
+  DIFFERS FROM THE DOCS — one, and it is the initializer:
+
+    Documented:  initialize(address rootAccount, uint256 roleBitmap)  0xcd6dc687
+    Deployed:    initialize((address,uint256)[])                      0x37cb53a8
+
+    The deployed UserRegistryImpl has no 0xcd6dc687 selector at all. It takes
+    an array of Grant{account, roleBitmap} structs — the same shape the docs
+    give for the RESOLVER's initializer, minus the trailing calls array.
+    Deploying from the documented signature reverts inside deployProxy with a
+    bare EvmError and no message.
+
+  NOT IN THE DOCS, AND IT BITES:
+
+    register() mints an ERC1155Singleton token to `owner`. A CONTRACT owner
+    must therefore implement IERC1155Receiver, or the mint reverts with
+    ERC1155InvalidReceiver(owner). Any registrar that keeps custody of the
+    names it registers — as SlotNamespace does — needs ERC1155Holder or an
+    equivalent. Nothing in the registrar guide mentions this.
+
+
+-------------------------------------------------------------------------------
+3. REGISTRY HIERARCHY
+-------------------------------------------------------------------------------
+
+ENSv1 had one flat registry; hierarchy was implied by namehash and enforced by
+a single non-upgradeable contract. ENSv2 gives every name its own registry.
+
+A full name is not a single on-chain object. `inigo.montoya.eth` is a chain of
+entries: `inigo` is an entry in the montoya.eth registry, `montoya` is an entry
+in the .eth registry, linked by each entry's `subregistry` field. On-chain, a
+"name" always means one label within one registry.
+
+  interface IRegistry {
+      function getSubregistry(string calldata label) external view returns (IRegistry);
+      function getResolver(string calldata label) external view returns (address);
+      function getParent() external view returns (IRegistry parent, string memory label);
+  }
+
+Consequences worth knowing:
+
+  * A whole subtree can be replaced in one call, by pointing a name at a
+    different subregistry. Every resolver and subname under it goes with it.
+  * Two names can share one subregistry, aliasing whole namespaces. Registries
+    therefore have NO inherent concept of "their name" — a registry may sit at
+    many positions, or none.
+  * If a parent expires or drops its subregistry pointer, every subname below
+    stops resolving automatically, because the walk returns address(0).
+
+Events any registry emits: LabelRegistered, LabelReserved, LabelUnregistered,
+ExpiryUpdated, SubregistryUpdated, ResolverUpdated, TokenRegenerated,
+ParentUpdated.
+
+
+-------------------------------------------------------------------------------
+4. PERMISSIONED REGISTRY
+-------------------------------------------------------------------------------
+
+The standard implementation: ERC1155Singleton tokens + EAC + expiry + mutable
+token ids. Replaces ENSv1's ENS Registry, BaseRegistrar and NameWrapper.
+
+Entry fields, keyed by canonical id (labelhash with the low 32 bits zeroed):
+
+  eacVersionId    uint32     isolates permissions across registrations
+  tokenVersionId  uint32     invalidates marketplace approvals on role change
+  subregistry     IRegistry  pointer to the child registry
+  expiry          uint64     expired when block.timestamp >= expiry
+  resolver        address    where this name's records live
+
+LIFECYCLE — three states, and the transitions each need a role:
+
+  AVAILABLE  -> REGISTERED           ROLE_REGISTRAR            root
+  AVAILABLE  -> RESERVED             ROLE_REGISTRAR            root
+  AVAILABLE (expired) -> either      ROLE_RENEW                root
+  RESERVED   -> REGISTERED           ROLE_REGISTER_RESERVED    root
+  REGISTERED/RESERVED -> AVAILABLE   ROLE_UNREGISTER           root or name
+
+  * register(): owner == address(0) reserves instead, and roleBitmap must be 0.
+  * A non-expired registered name cannot be re-registered; unregister first.
+  * expiry is an ABSOLUTE timestamp, not a duration.
+  * Re-registering an expired name burns the old token and bumps BOTH version
+    counters, so stale permissions and approvals cannot carry over.
+  * unregister() sets expiry to now; if the name had an owner the token burns
+    and both counters increment.
+  * renew() can only increase expiry. It can also revive an expired name with
+    its previous owner, token and roles — which is a different outcome from
+    re-registering it.
+
+ROLES (value, scope):
+
+  ROLE_REGISTRAR           1 << 0            root          register or reserve
+  ROLE_REGISTER_RESERVED   1 << 4            root          promote a reservation
+  ROLE_SET_PARENT          1 << 8            root          set parent registry
+  ROLE_UNREGISTER          1 << 12           root or name  unregister
+  ROLE_RENEW               1 << 16           root or name  extend expiry
+  ROLE_SET_SUBREGISTRY     1 << 20           root or name  set subregistry
+  ROLE_SET_RESOLVER        1 << 24           root or name  set resolver
+  ROLE_CAN_TRANSFER_ADMIN  (1 << 28) << 128  root or name  authorize transfers
+  ROLE_SET_URI             1 << 36           root          metadata
+  ROLE_UPGRADE             1 << 124          root          UUPS upgrades
+
+  Admin variant of a role = role << 128. ROLE_CAN_TRANSFER_ADMIN is the
+  exception: it exists ONLY as an admin role, and is checked against the token
+  OWNER rather than whoever initiates a transfer.
+
+TRANSFERS move all of the old owner's roles to the new owner atomically.
+Without ROLE_CAN_TRANSFER_ADMIN the name is non-transferable — the replacement
+for the CANNOT_TRANSFER fuse.
+
+OPERATOR APPROVAL: setApprovalForAll(operator, true) gives the operator ALL of
+the owner's roles on EVERY name the owner holds. There is no way to scope it.
+
+EMANCIPATION: a registry is emancipated when it is a verified implementation
+and NOBODY holds the dangerous roles on ROOT_RESOURCE — ROLE_SET_RESOLVER,
+ROLE_SET_SUBREGISTRY, ROLE_UNREGISTER, their admins, ROLE_CAN_TRANSFER_ADMIN,
+ROLE_UPGRADE and ROLE_UPGRADE_ADMIN. ROLE_REGISTRAR and ROLE_RENEW may stay:
+they cannot touch an existing registered name. Check with roleCount(0).
+
+  Note for this project: SlotNamespace asks for ROLE_REGISTRAR and
+  ROLE_UNREGISTER. The latter IS a dangerous role, so a namespace that holds it
+  is a managed registry, not an emancipated one — deliberately, because
+  unslotting a vacant label is the point. A namespace that only ever slots
+  labels permanently could be emancipated instead.
+
+
+-------------------------------------------------------------------------------
+5. ENHANCED ACCESS CONTROL (EAC)
+-------------------------------------------------------------------------------
+
+Replaces the NameWrapper's one-way fuses. Up to 2^256 resources, 64 roles per
+resource (32 regular + 32 admin), up to 15 holders per role per resource.
+
+  * A RESOURCE is the thing being controlled — usually a name.
+  * ROOT_RESOURCE (0x0) is the contract itself. A role held there applies
+    everywhere; a role check looks at the resource AND at ROOT_RESOURCE.
+  * Every role has an admin role that can grant it, grant the admin itself, or
+    revoke either.
+
+  grantRoles / revokeRoles          one resource; REVERT on ROOT_RESOURCE
+  grantRootRoles / revokeRootRoles  ROOT_RESOURCE, explicitly
+
+  The split is a guardrail: a global grant has to be asked for by name.
+
+BITMAP LAYOUT: one uint256, split in half. Bits 0..127 are the 32 regular
+roles, one nybble each; bits 128..255 are their admins at the same offsets.
+_roles[resource][account] stores 0 or 1 per nybble; _roleCount[resource] stores
+a 0..15 count per nybble, which is where the 15-holder limit comes from.
+
+  ALL_ROLES = 0x1111...1111 (every nybble set)
+
+HOOKS a contract may override: _getRoles, _onRolesGranted, _onRolesRevoked,
+_getSettableRoles, _getRevokableRoles. The Permissioned Registry uses them to
+let ERC1155 operators inherit roles, to regenerate tokens on role changes, and
+to stop admin-role escalation on a name after registration.
+
+
+-------------------------------------------------------------------------------
+6. MUTABLE TOKEN IDS
+-------------------------------------------------------------------------------
+
+Three ids share the same upper 224 bits (the labelhash) and differ in the low
+32:
+
+  canonical id  0x00000000       storage key
+  token id      tokenVersionId   ERC1155 ownership, marketplace approvals
+  resource      eacVersionId     EAC permission storage
+
+  Role grant/revoke     -> tokenVersionId + 1   token id changes
+  Re-registration       -> both + 1             old token burned
+  Unregistration        -> both + 1             token burned
+  Transfer              -> no change
+  Renewal               -> no change
+
+Why: eacVersionId orphans a previous registration's role grants; tokenVersionId
+kills a marketplace approval the moment the name's permissions change, so a
+seller cannot strip roles out from under a pending purchase.
+
+ANYID POLYMORPHISM: most registry functions take a `uint256 anyId` that may be
+a labelhash, a token id (current or stale), a resource or a canonical id. The
+registry does `anyId ^ uint32(anyId)` to reach the same entry.
+
+  RULE: never cache a token id. Store the LABELHASH and pass that.
+  This project passes labelhashes everywhere for exactly this reason.
+
+
+-------------------------------------------------------------------------------
+7. ERC1155Singleton
+-------------------------------------------------------------------------------
+
+ERC1155 with exactly one owner per id — ERC721 ownership semantics with ERC1155
+batching and tooling support.
+
+  ownerOf(id)             the single owner, or address(0)
+  balanceOf(account, id)  1 or 0
+  transfers               value must be exactly 1, or it reverts
+
+Ownership is a flat id -> address mapping, so a transfer is one storage write.
+The Permissioned Registry overrides ownerOf to return address(0) for expired
+names and for stale token ids.
+
+  Interface: IERC1155Singleton, selector 0x6352211e.
+
+Marketplace caveat: a listing tied to an old token id becomes invalid when the
+id changes. That is the intent.
+
+
+-------------------------------------------------------------------------------
+8. VERIFIABLE FACTORY
+-------------------------------------------------------------------------------
+
+  function deployProxy(address implementation, uint256 salt, bytes memory data)
+      external returns (address proxy);
+
+CREATE2 with outerSalt = keccak256(abi.encode(msg.sender, salt)), so the same
+salt from two deployers gives two addresses and no coordination is needed. The
+factory then calls proxy.initialize(implementation, data), which sets the
+ERC-1967 slot and delegatecalls `data` into the implementation.
+
+  verifyContract(proxy, expectedImplementation) reconstructs the CREATE2
+  address from the proxy's stored salt and returns whether it matches — the
+  property that makes the factory "verifiable".
+
+Documented salt schemes (convention, not enforced):
+
+  PermissionedResolverImpl  keccak256("OwnedResolver", owner, version)
+  UserRegistryImpl          keccak256("UserRegistry", namehash, version)
+
+Upgrades are per proxy and gated on ROLE_UPGRADE at that proxy's
+ROOT_RESOURCE.
+
+  Predicting the address off-chain needs (factory, deployer, salt, proxy
+  bytecode); see the docs for the viem snippet.
+
+
+-------------------------------------------------------------------------------
+9. PERMISSIONED RESOLVER
+-------------------------------------------------------------------------------
+
+One resolver instance per ACCOUNT, not per name. Records are numbered bundles
+that names link to, so several names can share one set of values.
+
+  Record types and their read profiles:
+
+    addr(bytes32)                        ENSIP-1
+    addr(bytes32,uint256)                ENSIP-9 (0x80000000 = EVM default)
+    text(bytes32,string)                 ENSIP-5
+    contenthash(bytes32)                 ENSIP-7
+    name(bytes32)                        EIP-181
+    ABI(bytes32,uint256)                 EIP-205
+    interfaceImplementer(bytes32,bytes4) ENSIP-8
+    data(bytes32,string)                 ENSIP-24
+
+  Setters take the DNS-ENCODED NAME (bytes), not a namehash.
+
+Resolution starts at the Universal Resolver, which calls
+resolve(name, data) with the profile calldata as `data`. The node inside that
+calldata is IGNORED — the resolver derives the node from `name`. There are no
+standalone getters for record values.
+
+  This is why SlotNamespaceResolver implements IExtendedResolver
+  (resolve(bytes,bytes), selector 0x9061b923) rather than bare getters: a
+  resolver without it is only usable on an exact match.
+
+LINKING: linkToNode(sourceName, targetNode) and linkToRecord(sourceName, id),
+both needing ROLE_LINK on root. Record 0 unlinks. An unlinked name falls back
+to the DEFAULT record, the one linked to the root name 0x00.
+
+Resolver roles (value, scope):
+
+  ROLE_SET_ADDRESS      1 << 0     root or coin type
+  ROLE_SET_TEXT         1 << 4     root or text key
+  ROLE_SET_CONTENTHASH  1 << 8     root
+  ROLE_SET_ABI          1 << 12    root or content type
+  ROLE_SET_INTERFACE    1 << 16    root or interface id
+  ROLE_SET_NAME         1 << 20    root
+  ROLE_SET_DATA         1 << 24    root or data key
+  ROLE_LINK             1 << 28    root
+  ROLE_CAN_NAME         1 << 120   root
+  ROLE_UPGRADE          1 << 124   root
+
+  There is NO per-name scoping. A grant applies to every name the instance
+  serves. To scope by name, give those names their own instance.
+
+  Resolver resources come from the setter ARGUMENT alone:
+    string key   -> keccak256(bytes(key))
+    uint256 arg  -> keccak256(abi.encode(value))
+    bytes4 arg   -> keccak256(abi.encodePacked(interfaceId))
+  anyId polymorphism does NOT apply here.
+
+  grantRoles() is disabled on the resolver and always reverts. Use
+  grantRootRoles() or grantSetterRoles(setter, account).
+
+
+-------------------------------------------------------------------------------
+10. UNIVERSAL RESOLVER V2
+-------------------------------------------------------------------------------
+
+findResolver() walks DOWN from the root. At each label it calls
+getResolver(label) — remembering the deepest non-zero one — then
+getSubregistry(label) to descend. The longest-suffix match wins, so a name with
+no resolver of its own inherits its nearest ancestor's.
+
+requireResolver() reverts with:
+  ResolverNotFound     no resolver, OR the resolver lacks IExtendedResolver and
+                       was found at a parent suffix (non-zero offset)
+  ResolverNotContract  matched exactly, lacks IExtendedResolver, has no code
+
+Navigation helpers:
+
+  findExactRegistry(name)      the subregistry the name points AT
+  findParentRegistry(name)     the registry the name is an ENTRY IN
+  findRegistries(name)         the whole ancestry, innermost first
+  findCanonicalName(registry)  walks UP via getParent(), verifying at each step
+                               that parent.getSubregistry(label) points back
+  findCanonicalRegistry(name)  both directions; use this when trust matters
+  findOwner(name)              via IOwnedRegistry.findOwner(label)
+
+The bidirectional check in findCanonicalRegistry is what defeats aliasing
+attacks, where a registry sits at one position but claims another via
+getParent().
+
+
+-------------------------------------------------------------------------------
+11. ETH REGISTRAR (for acquiring the parent name)
+-------------------------------------------------------------------------------
+
+Commit-reveal, as in ENSv1. makeCommitment(label, owner, secret, subregistry,
+resolver, duration, referrer) -> commit(hash) -> wait MIN_COMMITMENT_AGE (60s)
+-> register(same args + paymentToken).
+
+  Pricing: $640/yr for 3 chars, $160/yr for 4, $8/yr for 5+. Multi-year
+  discounts are applied to the whole term, and the 6-year tier is cheaper in
+  TOTAL than the 5-year one.
+
+  Grace period is 28 days (was 90). After it, a 21-day premium decays from
+  ~$100M, halving daily.
+
+  Payment is ERC20 via safeTransferFrom to an immutable beneficiary; approve
+  the registrar first. On this deployment, MockUSDC and MockDAI are available.
+
+  Roles granted to the registrant are hardcoded in REGISTRATION_ROLE_BITMAP:
+  ROLE_SET_SUBREGISTRY, ROLE_SET_SUBREGISTRY_ADMIN, ROLE_SET_RESOLVER,
+  ROLE_SET_RESOLVER_ADMIN, ROLE_CAN_TRANSFER_ADMIN.
+
+
+-------------------------------------------------------------------------------
+12. STANDING UP A SUBNAME REGISTRAR — THE FOUR STEPS
+-------------------------------------------------------------------------------
+
+  1. Deploy a UserRegistry proxy through the VerifiableFactory. The roleBitmap
+     in the initializer must include at least ROLE_REGISTRAR_ADMIN and, if you
+     will unregister, ROLE_UNREGISTER_ADMIN — granting a role later requires
+     holding its admin.
+
+  2. Point the parent name at it:
+       ethRegistry.setSubregistry(labelhash("parent"), userRegistry)
+     Until this happens, names register and mint but RESOLVE TO NOTHING,
+     because the Universal Resolver walks down from the root and never reaches
+     them. This is the step people forget.
+
+  3. Deploy the registrar.
+
+  4. userRegistry.grantRootRoles(ROLE_REGISTRAR | ..., registrar)
+
+  Troubleshooting:
+
+    EACUnauthorizedAccountRoles on register/renew
+        the registrar was never granted its role on ROOT_RESOURCE
+    EACCannotGrantRoles on grantRootRoles
+        the caller lacks the _ADMIN variant; check the initializer's bitmap
+    ERC1155InvalidReceiver on register
+        the owner is a contract without IERC1155Receiver
+    registers fine but does not resolve
+        step 2 was skipped, or the name has no records set
+
+
+-------------------------------------------------------------------------------
+13. INDEXING
+-------------------------------------------------------------------------------
+
+One register() call emits from TWO contracts. From the registry:
+
+  LabelRegistered   label, owner, expiry, sender
+  TokenResource     ties the token id to the EAC resource
+  TransferSingle    the ERC1155 mint
+  ResolverUpdated   if a resolver was set
+
+Renewals emit ExpiryUpdated. Indexing only a registrar's own events misses
+anything done directly on the registry by another role holder.
+
+  KEY YOUR INDEX ON THE LABELHASH, never on the token id, and follow
+  TokenRegenerated(oldTokenId, newTokenId) to track id changes.
