@@ -33,11 +33,9 @@ for _ in $(seq 1 40); do
   sleep 0.5
 done
 
-echo "→ seeding"
-cd "$ROOT/apps/contracts"
-forge script script/DevSeed.s.sol:DevSeed \
-  --rpc-url "http://127.0.0.1:$PORT" --broadcast --slow \
-  | grep -E "^  |wrote " || true
+# The same seed `dev:local` runs. It used to be a `forge script` that no
+# longer exists — see the note at the top of seed.sh for why it cannot be one.
+"$ROOT/scripts/seed.sh"
 
 echo
 echo "chain ready on http://127.0.0.1:$PORT — ctrl-c to stop"
