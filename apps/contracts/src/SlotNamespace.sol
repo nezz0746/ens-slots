@@ -28,7 +28,7 @@ import {ISlot, ISlotFactory, SlotInit} from "./interfaces/ISlots.sol";
  *          slot gas-caps and is allowed to swallow — and a swallowed move
  *          leaves the name pointing at somebody who no longer holds it.
  *        * The slot's ONE hook stays free. A slotted label can carry a minimum
- *          tenure, an advertising hook, or an eligibility rule, because this
+ *          tenure, a sponsorship hook, or an eligibility rule, because this
  *          contract does not need to be that hook.
  *
  *      The cost is that an occupant never holds a name NFT. They cannot sell
@@ -67,6 +67,32 @@ import {ISlot, ISlotFactory, SlotInit} from "./interfaces/ISlots.sol";
  *      the records could not be swapped without losing both.
  */
 contract SlotNamespace is Ownable, ERC1155Holder {
+    // ─── what a label is for ────────────────────────────────────────────────
+
+    /**
+     * @notice What kind of market a label is, declared when it is opened.
+     *
+     * @dev A DECLARATION, not a permission. {setText} is open to any key on any
+     *      label regardless of this, and gating it here would buy nothing: a
+     *      sponsor payload written on a `COMMON` label harms nobody, and the
+     *      check would only add a way for a legitimate write to fail.
+     *
+     *      It earns its place for a different reason. A VACANT label has no
+     *      record to infer anything from, so an empty label of one kind and an
+     *      empty label of the other are indistinguishable — and somebody about
+     *      to pay for one needs to know which market they are entering before
+     *      they enter it, not after.
+     *
+     *      COMMON     — an identity. Whoever holds it decides what it points at.
+     *      SPONSORING — an attention space. The holder publishes a payload, and
+     *                   the point of holding it is that somebody else renders
+     *                   that payload.
+     */
+    enum LabelKind {
+        COMMON,
+        SPONSORING
+    }
+
     // ─── configuration ──────────────────────────────────────────────────────
 
     /// @notice The UserRegistry holding this parent's subnames.
@@ -119,6 +145,9 @@ contract SlotNamespace is Ownable, ERC1155Holder {
     /// @notice Nodes whose binding the owner has given up the right to remove.
     mapping(bytes32 node => bool) public permanent;
 
+    /// @notice What kind of market each slotted label is. See {LabelKind}.
+    mapping(bytes32 node => LabelKind) public kindOfNode;
+
     /**
      * @notice Every node currently slotted, in slotting order.
      *
@@ -145,6 +174,24 @@ contract SlotNamespace is Ownable, ERC1155Holder {
      */
     mapping(bytes32 node => mapping(uint64 tenure => mapping(string key => string))) private _text;
 
+    /**
+     * @notice Text records on the PARENT name itself, written by the owner.
+     *
+     * @dev Separate storage rather than a tenure-zero entry in {_text}, and the
+     *      reason is that the parent name is not a slotted label and never can
+     *      be. It has no slot, so it has no `tenureId` to key by and no
+     *      occupant to authorise a write — {setText}'s two questions both have
+     *      no answer for it. Squeezing it into the same mapping would mean a
+     *      sentinel tenure that every read has to know about.
+     *
+     *      These do NOT clear, because there is no tenancy for them to belong
+     *      to. The parent name's owner is whoever the ENS registry says it is,
+     *      and this contract's owner is the party that speaks for it — a
+     *      namespace changing hands is an `Ownable` transfer, and the new owner
+     *      overwrites what they disagree with.
+     */
+    mapping(string key => string) private _parentText;
+
     // ─── errors ─────────────────────────────────────────────────────────────
 
     error AlreadySlotted(string label);
@@ -157,10 +204,14 @@ contract SlotNamespace is Ownable, ERC1155Holder {
 
     // ─── events ─────────────────────────────────────────────────────────────
 
-    event LabelSlotted(bytes32 indexed node, string label, address indexed slot, address hook, bool permanent);
+    event LabelSlotted(
+        bytes32 indexed node, string label, address indexed slot, address hook, bool permanent, LabelKind kind
+    );
     event LabelUnslotted(bytes32 indexed node, string label);
+    event KindChanged(bytes32 indexed node, LabelKind kind);
     event ResolverChanged(address indexed resolver);
     event TextChanged(bytes32 indexed node, uint64 indexed tenureId, string key, string value);
+    event ParentTextChanged(string key, string value);
 
     /**
      * @param registry     The UserRegistry this namespace registers into. It
@@ -203,35 +254,59 @@ contract SlotNamespace is Ownable, ERC1155Holder {
      *      so a more valuable label is priced higher by its own occupant and
      *      pays more tax at the same rate. That is what common ownership is for.
      *
+     * @param kind       What market this label is. See {LabelKind}. It changes
+     *                   nothing about what anyone may do — it tells a buyer what
+     *                   they are buying before there is a record to infer it from.
      * @param permanent_ Give up the right to ever {unslotLabel} this one. A
      *                   credible commitment to whoever occupies it, and
      *                   irreversible by construction.
      */
-    function slotLabel(string calldata label, address hook, bytes32 hookData, bool permanent_)
+    function slotLabel(string calldata label, LabelKind kind, address hook, bytes32 hookData, bool permanent_)
         external
         onlyOwner
         returns (address slot, uint256 tokenId)
     {
         if (resolver == address(0)) revert NoResolver();
 
-        bytes32 labelhash = keccak256(bytes(label));
-        bytes32 node = _node(labelhash);
+        bytes32 node = _node(keccak256(bytes(label)));
         if (slotOfNode[node] != address(0)) revert AlreadySlotted(label);
 
-        if (REGISTRY.getStatus(uint256(labelhash)) != IPermissionedRegistry.Status.AVAILABLE) {
+        if (REGISTRY.getStatus(uint256(keccak256(bytes(label)))) != IPermissionedRegistry.Status.AVAILABLE) {
             revert LabelUnavailable(label);
         }
 
-        SlotInit memory init = _terms;
-        init.hook = hook;
-        init.hookData = hookData;
-        slot = SLOT_FACTORY.createSlot(init);
+        {
+            SlotInit memory init = _terms;
+            init.hook = hook;
+            init.hookData = hookData;
+            slot = SLOT_FACTORY.createSlot(init);
+        }
 
-        // Registered to this contract, at no expiry. The continuous tax and
-        // liquidation already recycle an abandoned slot; a second clock would
-        // only add a way for a paid-up occupant to lose their name for an
-        // unrelated reason. It is also why `ROLE_RENEW` is never needed.
-        tokenId = REGISTRY.register(
+        tokenId = _register(label);
+
+        slotOfNode[node] = slot;
+        labelOfNode[node] = label;
+        kindOfNode[node] = kind;
+        _slotted.push(node);
+        _slottedAt[node] = _slotted.length;
+        if (permanent_) permanent[node] = true;
+
+        emit LabelSlotted(node, label, slot, hook, permanent_, kind);
+    }
+
+    /**
+     * @dev Registered to this contract, at no expiry. The continuous tax and
+     *      liquidation already recycle an abandoned slot; a second clock would
+     *      only add a way for a paid-up occupant to lose their name for an
+     *      unrelated reason. It is also why `ROLE_RENEW` is never needed.
+     *
+     *      Out of line rather than inline in {slotLabel}, which is a compiler
+     *      constraint and not a design one: the arguments here plus the six the
+     *      caller already holds put `slotLabel` over the stack limit without
+     *      `--via-ir`.
+     */
+    function _register(string calldata label) internal returns (uint256) {
+        return REGISTRY.register(
             label,
             address(this),
             IRegistry(address(0)),
@@ -239,14 +314,6 @@ contract SlotNamespace is Ownable, ERC1155Holder {
             RegistryRoles.ROLE_SET_RESOLVER | RegistryRoles.admin(RegistryRoles.ROLE_SET_RESOLVER),
             type(uint64).max
         );
-
-        slotOfNode[node] = slot;
-        labelOfNode[node] = label;
-        _slotted.push(node);
-        _slottedAt[node] = _slotted.length;
-        if (permanent_) permanent[node] = true;
-
-        emit LabelSlotted(node, label, slot, hook, permanent_);
     }
 
     /**
@@ -280,10 +347,29 @@ contract SlotNamespace is Ownable, ERC1155Holder {
 
         delete slotOfNode[node];
         delete labelOfNode[node];
+        delete kindOfNode[node];
 
         REGISTRY.unregister(uint256(labelhash));
 
         emit LabelUnslotted(node, label);
+    }
+
+    /**
+     * @notice Re-declare what kind of market an already-open label is.
+     *
+     * @dev Allowed while occupied, which looks wrong and is not. The kind is a
+     *      declaration about the label, not a term of the current tenancy, and
+     *      an owner who mislabelled a space should be able to correct it without
+     *      waiting for whoever is sitting in it to leave. Nothing about the
+     *      occupant's position changes: their price, their escrow and their
+     *      records are all untouched, and their records keep working either way
+     *      because the kind never gated them.
+     */
+    function setKind(string calldata label, LabelKind kind) external onlyOwner {
+        bytes32 node = _node(keccak256(bytes(label)));
+        if (slotOfNode[node] == address(0)) revert NotSlotted(node);
+        kindOfNode[node] = kind;
+        emit KindChanged(node, kind);
     }
 
     /// @notice Point this namespace's future registrations at a new resolver.
@@ -309,6 +395,10 @@ contract SlotNamespace is Ownable, ERC1155Holder {
      * @dev The occupant, not the owner: this is the one thing about a slotted
      *      name that its holder controls, and it lasts exactly as long as
      *      their tenancy.
+     *
+     *      Any key, on any label. There is no allow-list and no per-kind gate:
+     *      a record is the holder's to write, and a namespace that vetted keys
+     *      would be deciding what its occupants are allowed to say.
      */
     function setText(bytes32 node, string calldata key, string calldata value) external {
         address slot = slotOfNode[node];
@@ -321,6 +411,33 @@ contract SlotNamespace is Ownable, ERC1155Holder {
         _text[node][tenure][key] = value;
 
         emit TextChanged(node, tenure, key, value);
+    }
+
+    /**
+     * @notice Write a text record on the PARENT name — the namespace's own
+     *         profile: `avatar`, `header`, `description`, `url`.
+     *
+     * @dev The owner, not an occupant, and that is the whole difference from
+     *      {setText}. A slotted subname is a position somebody rents and its
+     *      records are theirs for as long as they hold it. The parent name is
+     *      not for sale here at all — it is the thing whose subnames are — so
+     *      the only party with any claim to describe it is the party that
+     *      opened it.
+     *
+     *      Ordinary ENS keys, deliberately. There is no bespoke schema for
+     *      "what a namespace looks like": `avatar` and `description` already
+     *      mean this on every ENS name in existence, and a client that renders
+     *      one of these has to be told nothing about this project to do it.
+     *      That is the same argument the sponsor record makes one level down.
+     *
+     *      Setting a key to the empty string clears it, which is how ENS's own
+     *      resolvers spell deletion — an unset record and a record set to ""
+     *      are indistinguishable to a reader, so a separate `clear` would only
+     *      be a second spelling of one state.
+     */
+    function setParentText(string calldata key, string calldata value) external onlyOwner {
+        _parentText[key] = value;
+        emit ParentTextChanged(key, value);
     }
 
     // ─── resolution, as data ────────────────────────────────────────────────
@@ -339,11 +456,29 @@ contract SlotNamespace is Ownable, ERC1155Holder {
         return ISlot(slot).occupant();
     }
 
-    /// @notice A text record, from the CURRENT tenancy only.
+    /**
+     * @notice A text record: the parent's own, or a subname's CURRENT tenancy.
+     *
+     * @dev One entry point for both because the resolver has only one. It is
+     *      handed a name, derives a node and asks — it does not know, and must
+     *      not have to know, whether that node is this namespace's parent or
+     *      one of the labels under it.
+     *
+     *      The parent is checked first. It can never collide with a slotted
+     *      node: every one of those is `keccak256(PARENT_NODE, labelhash)`, so
+     *      a collision would need a node that is its own child.
+     */
     function textOf(bytes32 node, string calldata key) public view returns (string memory) {
+        if (node == PARENT_NODE) return _parentText[key];
+
         address slot = slotOfNode[node];
         if (slot == address(0)) return "";
         return _text[node][ISlot(slot).tenureId()][key];
+    }
+
+    /// @notice A parent record, for callers that would rather not namehash.
+    function parentTextOf(string calldata key) external view returns (string memory) {
+        return _parentText[key];
     }
 
     // ─── views ──────────────────────────────────────────────────────────────
@@ -365,16 +500,22 @@ contract SlotNamespace is Ownable, ERC1155Holder {
      *      into this struct would give a client two sources for one fact and
      *      a way for them to disagree.
      */
-    function listing() external view returns (bytes32[] memory nodes, string[] memory labels, address[] memory slots) {
+    function listing()
+        external
+        view
+        returns (bytes32[] memory nodes, string[] memory labels, address[] memory slots, LabelKind[] memory kinds)
+    {
         uint256 n = _slotted.length;
         nodes = new bytes32[](n);
         labels = new string[](n);
         slots = new address[](n);
+        kinds = new LabelKind[](n);
         for (uint256 i; i < n; ++i) {
             bytes32 node = _slotted[i];
             nodes[i] = node;
             labels[i] = labelOfNode[node];
             slots[i] = slotOfNode[node];
+            kinds[i] = kindOfNode[node];
         }
     }
 

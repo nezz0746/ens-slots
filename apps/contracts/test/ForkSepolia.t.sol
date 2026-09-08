@@ -129,13 +129,13 @@ contract ForkSepoliaTest is Test {
         _slot("sponsor", address(0), false);
         vm.prank(owner);
         vm.expectRevert();
-        namespace.slotLabel("sponsor", address(0), bytes32(0), false);
+        namespace.slotLabel("sponsor", SlotNamespace.LabelKind.COMMON, address(0), bytes32(0), false);
     }
 
     function test_OnlyTheOwnerMaySlot() public {
         vm.prank(alice);
         vm.expectRevert();
-        namespace.slotLabel("sponsor", address(0), bytes32(0), false);
+        namespace.slotLabel("sponsor", SlotNamespace.LabelKind.COMMON, address(0), bytes32(0), false);
     }
 
     // ── the name follows the slot ───────────────────────────────────────────
@@ -210,6 +210,101 @@ contract ForkSepoliaTest is Test {
         assertEq(namespace.textOf(node, "avatar"), "", "and STILL cleared when alice returns");
     }
 
+    // ── the parent's own records ────────────────────────────────────────────
+
+    /**
+     * @notice The namespace describes itself, under ordinary ENS keys.
+     *
+     * @dev The parent name has no slot, so it has no occupant to authorise a
+     *      write and no `tenureId` to key one by. Its records belong to the
+     *      party that opened the namespace, and they are read back through the
+     *      same {SlotNamespace.textOf} every subname uses — one entry point,
+     *      because the resolver has only one.
+     */
+    function test_TheParentNameCarriesItsOwnRecords() public {
+        vm.startPrank(owner);
+        namespace.setParentText("avatar", "https://example.com/pfp.png");
+        namespace.setParentText("header", "https://example.com/banner.png");
+        namespace.setParentText("description", "A namespace.");
+        namespace.setParentText("url", "https://example.com");
+        vm.stopPrank();
+
+        assertEq(namespace.textOf(PARENT_NODE, "avatar"), "https://example.com/pfp.png");
+        assertEq(namespace.textOf(PARENT_NODE, "header"), "https://example.com/banner.png");
+        assertEq(namespace.textOf(PARENT_NODE, "description"), "A namespace.");
+        assertEq(namespace.textOf(PARENT_NODE, "url"), "https://example.com");
+
+        // The convenience view and the node-addressed one must not disagree.
+        assertEq(namespace.parentTextOf("url"), namespace.textOf(PARENT_NODE, "url"));
+    }
+
+    /// @notice An occupant of a subname has no say over the parent's profile.
+    function test_OnlyTheOwnerWritesTheParentRecords() public {
+        (address slot,) = _slot("sponsor", address(0), false);
+        _take(slot, alice, 1 ether);
+
+        vm.prank(alice);
+        vm.expectRevert();
+        namespace.setParentText("avatar", "https://example.com/hijack.png");
+    }
+
+    /**
+     * @notice The parent's records are NOT tenancy-scoped, and must not be.
+     *
+     * @dev The inverse of {test_RecordsDoNotComeBackWhenAnOccupantDoes}. A
+     *      subname's records clear on turnover because they belonged to a
+     *      tenancy that ended. The parent name was never for sale, so nothing
+     *      about it ended, and a namespace whose avatar vanished because
+     *      somebody outbid somebody else one level down would be broken.
+     */
+    function test_TheParentRecordsOutliveATurnoverBelow() public {
+        vm.prank(owner);
+        namespace.setParentText("avatar", "https://example.com/pfp.png");
+
+        (address slot,) = _slot("sponsor", address(0), false);
+        _take(slot, alice, 1 ether);
+        vm.prank(alice);
+        namespace.setText(_node("sponsor"), "avatar", "alice.png");
+
+        _take(slot, bob, 2 ether);
+
+        assertEq(namespace.textOf(_node("sponsor"), "avatar"), "", "the subname's cleared");
+        assertEq(namespace.textOf(PARENT_NODE, "avatar"), "https://example.com/pfp.png", "the parent's did not");
+    }
+
+    /// @notice Empty is how ENS spells deletion, so it has to actually clear.
+    function test_AParentRecordIsClearedByWritingEmpty() public {
+        vm.startPrank(owner);
+        namespace.setParentText("url", "https://example.com");
+        namespace.setParentText("url", "");
+        vm.stopPrank();
+
+        assertEq(namespace.textOf(PARENT_NODE, "url"), "");
+    }
+
+    /**
+     * @notice The parent name resolves through the same resolver its subnames do.
+     *
+     * @dev The path a client actually takes: DNS-encoded name → namehash →
+     *      `textOf`. Nothing here knows the parent is special, which is the
+     *      test — the resolver derives a node and asks, and the namespace
+     *      answers for whichever kind of node it turned out to be.
+     */
+    function test_TheResolverAnswersForTheParentName() public {
+        vm.prank(owner);
+        namespace.setParentText("description", "The namespace itself.");
+
+        bytes memory answer = resolver.resolve(
+            _dnsEncode("slotsdemo", "eth"), abi.encodeWithSelector(bytes4(0x59d1d43c), bytes32(0), "description")
+        );
+        assertEq(abi.decode(answer, (string)), "The namespace itself.");
+
+        // The parent is not a slot, so it has no occupant. Zero is the honest
+        // answer rather than a stand-in owner with no claim to the name.
+        answer = resolver.resolve(_dnsEncode("slotsdemo", "eth"), abi.encodeWithSelector(bytes4(0x3b3b57de), bytes32(0)));
+        assertEq(abi.decode(answer, (address)), address(0));
+    }
+
     // ── unslotting ──────────────────────────────────────────────────────────
 
     function test_AVacantLabelCanBeUnslotted() public {
@@ -276,7 +371,7 @@ contract ForkSepoliaTest is Test {
         _slot("sponsor", address(0), false);
         _slot("partner", address(0), false);
 
-        (bytes32[] memory nodes, string[] memory labels, address[] memory slots) = namespace.listing();
+        (bytes32[] memory nodes, string[] memory labels, address[] memory slots,) = namespace.listing();
 
         assertEq(nodes.length, 2);
         assertEq(labels[0], "sponsor");
@@ -294,7 +389,7 @@ contract ForkSepoliaTest is Test {
         vm.prank(owner);
         namespace.unslotLabel("a");
 
-        (, string[] memory labels,) = namespace.listing();
+        (, string[] memory labels,,) = namespace.listing();
         assertEq(labels.length, 2);
         assertEq(labels[0], "c", "the last one moved into the gap");
         assertEq(labels[1], "b");
@@ -319,11 +414,66 @@ contract ForkSepoliaTest is Test {
         factory.open(registry, PARENT_NODE, "slotsdemo.eth", t, owner);
     }
 
+    // ── what kind of label it is ────────────────────────────────────────────
+
+    /// @notice The kind is recorded when the label is opened, and listed.
+    function test_ALabelDeclaresWhatKindOfMarketItIs() public {
+        _slot("identity", address(0), false, SlotNamespace.LabelKind.COMMON);
+        _slot("banner", address(0), false, SlotNamespace.LabelKind.SPONSORING);
+
+        (,,, SlotNamespace.LabelKind[] memory kinds) = namespace.listing();
+        assertEq(uint8(kinds[0]), uint8(SlotNamespace.LabelKind.COMMON));
+        assertEq(uint8(kinds[1]), uint8(SlotNamespace.LabelKind.SPONSORING));
+        assertEq(uint8(namespace.kindOfNode(_node("banner"))), uint8(SlotNamespace.LabelKind.SPONSORING));
+    }
+
+    /**
+     * @notice The kind gates NOTHING. It is a declaration to a buyer, and the
+     *         holder of an ordinary label can still publish a sponsor record.
+     */
+    function test_TheKindIsADeclarationAndNotAPermission() public {
+        (address slot,) = _slot("identity", address(0), false, SlotNamespace.LabelKind.COMMON);
+        _take(slot, alice, 1 ether);
+
+        vm.prank(alice);
+        namespace.setText(_node("identity"), "org.0xslots.sponsor", "{\"v\":1}");
+        assertEq(namespace.textOf(_node("identity"), "org.0xslots.sponsor"), "{\"v\":1}");
+    }
+
+    /// @notice A mislabelled space can be corrected without evicting anyone.
+    function test_TheKindCanBeCorrectedWhileOccupied() public {
+        (address slot,) = _slot("banner", address(0), false, SlotNamespace.LabelKind.COMMON);
+        _take(slot, alice, 1 ether);
+
+        vm.prank(owner);
+        namespace.setKind("banner", SlotNamespace.LabelKind.SPONSORING);
+
+        assertEq(uint8(namespace.kindOfNode(_node("banner"))), uint8(SlotNamespace.LabelKind.SPONSORING));
+        assertEq(namespace.addrOf(_node("banner")), alice, "and alice still holds it");
+    }
+
+    /// @notice Records are the occupant's, and nobody else's — not even the owner.
+    function test_OnlyTheOccupantWritesRecords() public {
+        (address slot,) = _slot("banner", address(0), false, SlotNamespace.LabelKind.SPONSORING);
+        _take(slot, alice, 1 ether);
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(SlotNamespace.NotOccupant.selector, owner, alice));
+        namespace.setText(_node("banner"), "org.0xslots.sponsor", "not yours");
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────────
 
     function _slot(string memory label, address hook, bool permanent) internal returns (address slot, uint256 tokenId) {
+        return _slot(label, hook, permanent, SlotNamespace.LabelKind.COMMON);
+    }
+
+    function _slot(string memory label, address hook, bool permanent, SlotNamespace.LabelKind kind)
+        internal
+        returns (address slot, uint256 tokenId)
+    {
         vm.prank(owner);
-        return namespace.slotLabel(label, hook, bytes32(0), permanent);
+        return namespace.slotLabel(label, kind, hook, bytes32(0), permanent);
     }
 
     /// @dev Buy `slot` for `who` at `price`, funding the protocol's floor.
@@ -342,5 +492,10 @@ contract ForkSepoliaTest is Test {
     function _dnsEncode(string memory a, string memory b, string memory c) internal pure returns (bytes memory) {
         return
             abi.encodePacked(uint8(bytes(a).length), a, uint8(bytes(b).length), b, uint8(bytes(c).length), c, uint8(0));
+    }
+
+    /// @dev `slotsdemo.eth` → `\x09slotsdemo\x03eth\x00`
+    function _dnsEncode(string memory a, string memory b) internal pure returns (bytes memory) {
+        return abi.encodePacked(uint8(bytes(a).length), a, uint8(bytes(b).length), b, uint8(0));
     }
 }
