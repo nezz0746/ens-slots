@@ -31,7 +31,18 @@ export const config = createConfig({
         mock({ accounts: [a.address as `0x${string}`] }),
       )
     : [injected()],
-  transports: { [activeChain.id]: http() } as Record<number, ReturnType<typeof http>>,
+  /**
+   * Reads issued in the same tick go out as one `aggregate3`.
+   *
+   * It matters here more than it usually would. The subname list asks
+   * `getEnsText` for every name it shows, and each of those is a call through
+   * the Universal Resolver — so a namespace with eight labels is eight round
+   * trips without this, in series behind React Query, and one with it.
+   */
+  transports: {
+    [activeChain.id]: http(undefined, { batch: true }),
+  } as Record<number, ReturnType<typeof http>>,
+  batch: { multicall: true },
   ssr: true,
 });
 

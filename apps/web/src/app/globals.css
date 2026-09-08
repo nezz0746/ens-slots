@@ -97,3 +97,35 @@ body {
     radial-gradient(30rem 16rem at 55% -4rem, #f8f6d6aa 0%, transparent 70%);
   background-repeat: no-repeat;
 }
+
+/*
+ * A figure that just grew.
+ *
+ * Green fading back to ink, restarted by remounting the element rather than by
+ * a timer. The first version toggled a class on a `setTimeout`, and every
+ * update cleared the pending one before it could fire — so the number sat
+ * permanently green and the "flash" communicated nothing at all. An animation
+ * cannot get stuck in its own start state.
+ */
+@keyframes tick-flash {
+  from {
+    color: var(--color-good);
+  }
+  to {
+    color: var(--color-ink);
+  }
+}
+
+/* Comfortably shorter than the two-second tick, so it always reaches its end
+   state. An animation longer than the interval that restarts it is a colour,
+   not a flash. */
+.tick-flash {
+  animation: tick-flash 900ms ease-out;
+}
+
+/* A pulse every two seconds is exactly what this setting is for. */
+@media (prefers-reduced-motion: reduce) {
+  .tick-flash {
+    animation: none;
+  }
+}

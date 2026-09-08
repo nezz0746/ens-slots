@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useTx } from "@/hooks/use-tx";
 import { namespaceAbi } from "@/lib/abis";
 import type { Namespace } from "@/hooks/use-namespaces";
-import { addresses } from "@/lib/addresses";
+import { addresses, KIND_COMMON, KIND_SPONSORING } from "@/lib/addresses";
 import { cn } from "@/lib/utils";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
@@ -19,8 +19,12 @@ const ZERO32 =
 /**
  * Put another label on the market. Shown only to whoever opened the namespace.
  *
- * The two options are the ones that change what a holder is buying, so they
- * are on the form rather than behind a settings page:
+ * Everything on this form changes what a holder is buying, which is why it is
+ * here rather than behind a settings page:
+ *
+ *   Kind — an identity, or a space whose whole purpose is to show what its
+ *   holder publishes. It gates nothing; it tells a buyer which market they are
+ *   entering, which is otherwise unknowable while the label is still empty.
  *
  *   Permanent — gives up the right to ever take this label back, even while
  *   vacant. A promise to whoever holds it, and irreversible by construction.
@@ -34,6 +38,7 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
   const [label, setLabel] = useState("");
   const [permanent, setPermanent] = useState(false);
   const [tenure, setTenure] = useState(false);
+  const [sponsoring, setSponsoring] = useState(false);
 
   const isOwner =
     !!address && namespace.owner.toLowerCase() === address.toLowerCase();
@@ -63,6 +68,7 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
               functionName: "slotLabel",
               args: [
                 clean,
+                sponsoring ? KIND_SPONSORING : KIND_COMMON,
                 // hookData is the tenure window in seconds, and it must be
                 // zero when there is no hook — the slot refuses the pair
                 // otherwise.
@@ -79,6 +85,21 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
           <Plus />
           {pending === "slot" ? "Confirming…" : "Open"}
         </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5">
+        <Kind
+          on={!sponsoring}
+          onClick={() => setSponsoring(false)}
+          title="Common"
+          note="An identity. The holder decides what it points at."
+        />
+        <Kind
+          on={sponsoring}
+          onClick={() => setSponsoring(true)}
+          title="Sponsoring"
+          note="An attention space. The holder publishes what it shows."
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -103,6 +124,43 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
       )}
       {error && <p className="text-[11px] text-hot">{error}</p>}
     </div>
+  );
+}
+
+function Kind({
+  on,
+  onClick,
+  title,
+  note,
+}: {
+  on: boolean;
+  onClick: () => void;
+  title: string;
+  note: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-lg border px-2.5 py-2 text-left transition-colors",
+        on
+          ? "border-brand bg-brand-soft"
+          : "border-line bg-surface hover:border-brand/40",
+      )}
+    >
+      <div
+        className={cn(
+          "text-[11px] font-semibold",
+          on ? "text-brand-ink" : "text-ink",
+        )}
+      >
+        {title}
+      </div>
+      <div className="mt-0.5 text-[10px] leading-snug text-ink-faint">
+        {note}
+      </div>
+    </button>
   );
 }
 

@@ -16,6 +16,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@ens-slots/sponsor':
+        specifier: workspace:*
+        version: link:../../packages/sponsor
       '@tanstack/react-query':
         specifier: ^5.62.7
         version: 5.102.8(react@19.2.8)
@@ -46,6 +49,9 @@ importers:
       wagmi:
         specifier: ^2.14.6
         version: 2.19.5(@tanstack/query-core@5.102.8)(@tanstack/react-query@5.102.8(react@19.2.8))(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.8)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.56.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.0.0
@@ -62,6 +68,16 @@ importers:
       tailwindcss:
         specifier: ^4.0.0
         version: 4.3.3
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/sponsor:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

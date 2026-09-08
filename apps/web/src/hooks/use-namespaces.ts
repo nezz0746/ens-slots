@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
 
-import { addresses, isDeployed } from "@/lib/addresses";
+import { addresses, isDeployed, KIND_SPONSORING } from "@/lib/addresses";
 import { namespaceAbi, namespaceFactoryAbi, slotAbi } from "@/lib/abis";
 
 /**
@@ -32,7 +32,15 @@ export interface SlotState {
   isVacant: boolean;
   isInsolvent: boolean;
   secondsUntilLiquidation: bigint;
+  /**
+   * The RAW debt since the last settlement — uncapped, so it can exceed the
+   * escrow. What a collection actually pays is `collectedTax + min(taxOwed,
+   * deposit)`; the excess on an insolvent slot is carried as arrears against
+   * the occupant and never reaches the recipient.
+   */
   taxOwed: bigint;
+  /** Already settled into the slot and waiting for someone to call `collect`. */
+  collectedTax: bigint;
   recipient: `0x${string}`;
   hook: `0x${string}`;
 }
@@ -41,6 +49,8 @@ export interface Subname {
   node: `0x${string}`;
   label: string;
   slot: `0x${string}`;
+  /** True for a label opened as a sponsoring space. See `LabelKind`. */
+  sponsoring: boolean;
   state?: SlotState;
 }
 
@@ -55,6 +65,14 @@ export interface Namespace {
   /** What every occupant has collectively declared their names are worth. */
   totalValue: bigint;
 }
+
+/** What `listing()` hands back: nodes, labels, slots, kinds — four arrays. */
+type Listing = [
+  readonly `0x${string}`[],
+  readonly string[],
+  readonly `0x${string}`[],
+  readonly number[],
+];
 
 /** Flatten the tuple `getSlotInfo` returns into what the UI actually reads. */
 // biome-ignore lint/suspicious/noExplicitAny: the tuple is typed by viem at the call site
@@ -71,6 +89,7 @@ function toState(info: any): SlotState {
     isInsolvent: info.isInsolvent,
     secondsUntilLiquidation: info.secondsUntilLiquidation,
     taxOwed: info.taxOwed,
+    collectedTax: info.collectedTax,
     recipient: info.recipient,
     hook: info.hook,
   };
@@ -90,6 +109,7 @@ export function useNamespaces(only?: `0x${string}`) {
   );
 
   // Round two: who each namespace is.
+  const PER_NS = 5;
   const { data: meta, isLoading: loadingMeta } = useReadContracts({
     contracts: list.flatMap((address) => [
       { address, abi: namespaceAbi, functionName: "parentName" } as const,
@@ -106,9 +126,7 @@ export function useNamespaces(only?: `0x${string}`) {
     if (!meta) return [] as `0x${string}`[];
     const out: `0x${string}`[] = [];
     for (let i = 0; i < list.length; i++) {
-      const listing = meta[i * 5 + 4]?.result as
-        | [readonly `0x${string}`[], readonly string[], readonly `0x${string}`[]]
-        | undefined;
+      const listing = meta[i * PER_NS + 4]?.result as Listing | undefined;
       if (listing) out.push(...listing[2]);
     }
     return out;
@@ -126,10 +144,8 @@ export function useNamespaces(only?: `0x${string}`) {
     if (!meta) return [];
     let cursor = 0;
     return list.map((address, i) => {
-      const listing = meta[i * 5 + 4]?.result as
-        | [readonly `0x${string}`[], readonly string[], readonly `0x${string}`[]]
-        | undefined;
-      const [nodes, labels, slotAddrs] = listing ?? [[], [], []];
+      const listing = meta[i * PER_NS + 4]?.result as Listing | undefined;
+      const [nodes, labels, slotAddrs, kinds] = listing ?? [[], [], [], []];
 
       const subnames: Subname[] = slotAddrs.map((slot, j) => {
         const info = infos?.[cursor++];
@@ -137,6 +153,7 @@ export function useNamespaces(only?: `0x${string}`) {
           node: nodes[j],
           label: labels[j],
           slot,
+          sponsoring: kinds[j] === KIND_SPONSORING,
           state:
             info?.status === "success" ? toState(info.result) : undefined,
         };
@@ -144,10 +161,10 @@ export function useNamespaces(only?: `0x${string}`) {
 
       return {
         address,
-        parentName: (meta[i * 5]?.result as string) ?? "",
-        parentNode: (meta[i * 5 + 1]?.result as `0x${string}`) ?? "0x",
-        owner: (meta[i * 5 + 2]?.result as `0x${string}`) ?? "0x",
-        resolver: (meta[i * 5 + 3]?.result as `0x${string}`) ?? "0x",
+        parentName: (meta[i * PER_NS]?.result as string) ?? "",
+        parentNode: (meta[i * PER_NS + 1]?.result as `0x${string}`) ?? "0x",
+        owner: (meta[i * PER_NS + 2]?.result as `0x${string}`) ?? "0x",
+        resolver: (meta[i * PER_NS + 3]?.result as `0x${string}`) ?? "0x",
         subnames,
         occupied: subnames.filter((s) => s.state && !s.state.isVacant).length,
         totalValue: subnames.reduce(

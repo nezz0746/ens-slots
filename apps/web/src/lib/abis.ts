@@ -89,6 +89,23 @@ export const namespaceAbi = [
   },
   {
     type: "function",
+    name: "kindOfNode",
+    stateMutability: "view",
+    inputs: [{ name: "node", type: "bytes32" }],
+    outputs: [{ type: "uint8" }],
+  },
+  {
+    type: "function",
+    name: "setKind",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "label", type: "string" },
+      { name: "kind", type: "uint8" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "resolver",
     stateMutability: "view",
     inputs: [],
@@ -110,6 +127,7 @@ export const namespaceAbi = [
       { name: "nodes", type: "bytes32[]" },
       { name: "labels", type: "string[]" },
       { name: "slots", type: "address[]" },
+      { name: "kinds", type: "uint8[]" },
     ],
   },
   {
@@ -149,6 +167,23 @@ export const namespaceAbi = [
   },
   {
     type: "function",
+    name: "parentTextOf",
+    stateMutability: "view",
+    inputs: [{ name: "key", type: "string" }],
+    outputs: [{ type: "string" }],
+  },
+  {
+    type: "function",
+    name: "setParentText",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "key", type: "string" },
+      { name: "value", type: "string" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "setResolver",
     stateMutability: "nonpayable",
     inputs: [{ name: "newResolver", type: "address" }],
@@ -167,6 +202,7 @@ export const namespaceAbi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "label", type: "string" },
+      { name: "kind", type: "uint8" },
       { name: "hook", type: "address" },
       { name: "hookData", type: "bytes32" },
       { name: "permanent_", type: "bool" },
@@ -316,6 +352,30 @@ export const slotAbi = [
     stateMutability: "nonpayable",
     inputs: [],
     outputs: [],
+  },
+] as const;
+
+/**
+ * The 0xSlots factory, for the two calls this app makes of it.
+ *
+ * `collectAll` is a v3 addition and the factory deployed on Sepolia is v2, so
+ * it may not be there — `version()` is here to ask before reaching for it. See
+ * `useCollectAll` for what happens when it is missing.
+ */
+export const slotFactoryAbi = [
+  {
+    type: "function",
+    name: "version",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [{ type: "uint64" }],
+  },
+  {
+    type: "function",
+    name: "collectAll",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "slots", type: "address[]" }],
+    outputs: [{ type: "uint256[]" }],
   },
 ] as const;
 

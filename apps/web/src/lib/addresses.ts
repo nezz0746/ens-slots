@@ -33,3 +33,7 @@ export const ALL_ROLES =
 /** What a namespace needs on its registry, and nothing more. */
 export const ROLE_REGISTRAR = 1n << 0n;
 export const ROLE_UNREGISTER = 1n << 12n;
+
+/** `SlotNamespace.LabelKind`, as the contract numbers it. */
+export const KIND_COMMON = 0;
+export const KIND_SPONSORING = 1;

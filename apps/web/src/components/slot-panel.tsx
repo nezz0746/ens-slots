@@ -9,10 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/input";
 import { ValuationInput } from "@/components/valuation-input";
-import type { Namespace, Subname } from "@/hooks/use-namespaces";
+import type { Subname } from "@/hooks/use-namespaces";
 import { useTx } from "@/hooks/use-tx";
 import { slotAbi } from "@/lib/abis";
-import { formatAmount, shortAddress } from "@/lib/format";
+import { formatAmount } from "@/lib/format";
 import {
   describeDays,
   MONTH_SECONDS,
@@ -25,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Everything you can do to a slot, filtered to what YOU can do to it.
+ * The market for one name, filtered to what YOU can do about it.
  *
  * The panel has three faces and they are mutually exclusive, because the two
  * roles want different things and showing both at once is how a buy button
@@ -37,13 +37,16 @@ import { cn } from "@/lib/utils";
  *
  * Liquidate and collect sit outside that split: anyone may call them, and they
  * only appear when the chain says they would do something.
+ *
+ * What the name IS lives in {NameDetails}, one column over. The split is not
+ * cosmetic: a visitor arrives asking two questions — what is this, and can I
+ * have it — and answering both in one column made the second one push the
+ * first off the screen the moment a form opened.
  */
 export function SlotPanel({
-  namespace,
   subname,
   onDone,
 }: {
-  namespace: Namespace;
   subname: Subname;
   onDone?: () => void;
 }) {
@@ -59,18 +62,10 @@ export function SlotPanel({
 
   return (
     <div>
-      <header className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-lg font-semibold tracking-tight">
-            {subname.label}
-            <span className="text-ink-faint">.{namespace.parentName}</span>
-          </h2>
-          <p className="mt-0.5 text-xs text-ink-faint">
-            {isVacant
-              ? "Nobody holds this"
-              : `Held by ${isOccupant ? "you" : shortAddress(state?.occupant)}`}
-          </p>
-        </div>
+      <header className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+        <h2 className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
+          The market
+        </h2>
         <Status subname={subname} />
       </header>
 

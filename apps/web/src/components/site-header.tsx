@@ -10,7 +10,7 @@ import { UsdcWidget } from "@/components/usdc-widget";
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-line/70 bg-surface/60 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-5 py-3">
+      <div className="flex w-full items-center gap-4 px-5 py-3 lg:px-8">
         <Link href="/" className="flex items-center gap-2">
           <Mark className="size-7" />
           <span className="text-sm font-semibold tracking-tight">
