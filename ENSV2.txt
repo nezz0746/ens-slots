@@ -141,6 +141,27 @@ apps/contracts/test/ForkSepolia.t.sol against a Sepolia fork.
     Deploying from the documented signature reverts inside deployProxy with a
     bare EvmError and no message.
 
+  CONFIRMED ON THE ETHRegistrar — every signature matches the docs:
+
+    isAvailable(string)                                      0x965306aa
+    getRegisterPrice(string,uint64,address)                  0x61907b12
+    getRenewPrice(string,uint64,address)                     0xddf0effc
+    makeCommitment(string,address,bytes32,address,address,uint64,bytes32)
+                                                             0x1e966f07
+    commit(bytes32)                                          0xf14fcbc8
+    register(string,address,bytes32,address,address,uint64,address,bytes32)
+                                                             0xcff3e7c2
+    commitmentAt(bytes32)                                    0x16a92535
+    MIN_COMMITMENT_AGE()                                     0x2e4f692a
+    MIN_REGISTER_DURATION()                                  0xa40938bd
+
+    Measured on this deployment: MIN_COMMITMENT_AGE = 60 seconds,
+    MIN_REGISTER_DURATION = 2,419,200 (28 days). A 5+ character name costs
+    8.000021 MockUSDC for a year, premium zero.
+
+    MockUSDC's mint(address,uint256) (0x40c10f19) is OPEN — anyone can mint.
+    That is what makes a faucet possible rather than an admin function.
+
   NOT IN THE DOCS, AND IT BITES:
 
     register() mints an ERC1155Singleton token to `owner`. A CONTRACT owner
@@ -500,9 +521,45 @@ resolver, duration, referrer) -> commit(hash) -> wait MIN_COMMITMENT_AGE (60s)
     EACCannotGrantRoles on grantRootRoles
         the caller lacks the _ADMIN variant; check the initializer's bitmap
     ERC1155InvalidReceiver on register
-        the owner is a contract without IERC1155Receiver
+        the owner is a contract without IERC1155Receiver — and on a FORK that
+        includes addresses you would swear are EOAs. Every anvil default
+        account has an EIP-7702 delegation on Sepolia (code beginning
+        0xef0100), pointing those famous test keys at smart accounts that do
+        not implement the receiver. Forking inherits it, so registering a name
+        to anvil account 0 fails with an error naming what looks like a plain
+        EOA. `cast rpc anvil_setCode <addr> 0x` clears it locally.
     registers fine but does not resolve
         step 2 was skipped, or the name has no records set
+
+
+-------------------------------------------------------------------------------
+12b. RESOLUTION, MEASURED END TO END
+-------------------------------------------------------------------------------
+
+Verified against the hackathon UniversalResolver on a Sepolia fork, with a real
+parent name bought through the ETHRegistrar and wired up with setSubregistry:
+
+  findResolver("me.zzresolve.eth")   -> our resolver, offset 0 (exact match)
+  resolve(name, addr(bytes32))       -> the occupant's address
+  resolve(name, addr(bytes32,60))    -> the same, as 20 bytes
+  resolve(name, text(bytes32,key))   -> the stored value
+  resolve(name, contenthash(bytes32))-> reverts UnsupportedResolverProfile
+                                        (0x7b1c461b) carrying the selector
+
+  viem, with the UR override:
+    getEnsAddress({name}) -> the occupant
+    getEnsText({name, key: "avatar"}) -> the value
+  viem, WITHOUT the override:
+    getEnsAddress({name}) -> null, silently. Not an error — the standard
+    ENSv2 Beta UR lives on the same chain, answers, and knows nothing about
+    this deployment. This is the single easiest way to conclude the whole
+    thing is broken when it is not.
+
+  MULTICALL BATCHING NEEDS NOTHING FROM THE RESOLVER.
+  `resolve(name, multicall(bytes[]))` works against a resolver that has no
+  multicall function at all: the Universal Resolver decomposes the batch and
+  calls `resolve` once per inner profile, then reassembles. Measured, not
+  assumed — a resolver only has to answer the individual profiles.
 
 
 -------------------------------------------------------------------------------

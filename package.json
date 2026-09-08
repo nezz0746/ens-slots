@@ -3,9 +3,13 @@
   "private": true,
   "packageManager": "pnpm@9.12.0",
   "scripts": {
+    "dev": "turbo dev",
+    "dev:local": "./scripts/dev-local.sh",
+    "chain": "./scripts/dev-chain.sh",
+    "seed": "./scripts/seed.sh",
     "build": "turbo build",
     "test": "turbo test",
-    "fmt": "turbo fmt"
+    "typecheck": "turbo typecheck"
   },
   "devDependencies": {
     "turbo": "^2.3.3"

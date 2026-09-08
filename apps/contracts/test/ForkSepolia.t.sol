@@ -15,6 +15,7 @@ import {
     RegistryRoles
 } from "../src/interfaces/IENSv2.sol";
 import {ISlot, ISlotFactory, SlotInit} from "../src/interfaces/ISlots.sol";
+import {SlotNamespaceFactory} from "../src/SlotNamespaceFactory.sol";
 
 /**
  * @notice The whole thing, against the real contracts on Sepolia.
@@ -74,6 +75,7 @@ contract ForkSepoliaTest is Test {
             registry,
             ISlotFactory(SepoliaAddresses.SLOT_FACTORY),
             PARENT_NODE,
+            "slotsdemo.eth",
             SlotInit({
                 recipient: recipient,
                 currency: IERC20(address(0)), // native ETH
@@ -265,6 +267,56 @@ contract ForkSepoliaTest is Test {
     /// @dev Without this the Universal Resolver refuses a namespace resolver.
     function test_TheResolverDeclaresTheExtendedInterface() public view {
         assertTrue(resolver.supportsInterface(0x9061b923));
+    }
+
+    // ── listing, which is all the client has ────────────────────────────────
+
+    /// @notice Without this a home page cannot list its own contents.
+    function test_TheNamespaceListsWhatItHasSlotted() public {
+        _slot("sponsor", address(0), false);
+        _slot("partner", address(0), false);
+
+        (bytes32[] memory nodes, string[] memory labels, address[] memory slots) = namespace.listing();
+
+        assertEq(nodes.length, 2);
+        assertEq(labels[0], "sponsor");
+        assertEq(labels[1], "partner");
+        assertEq(slots[0], namespace.slotOfNode(_node("sponsor")));
+        assertEq(namespace.parentName(), "slotsdemo.eth", "the human name, since a node is a hash");
+    }
+
+    /// @notice Unslotting swaps in the last entry rather than leaving a hole.
+    function test_UnslottingLeavesTheListingDense() public {
+        _slot("a", address(0), false);
+        _slot("b", address(0), false);
+        _slot("c", address(0), false);
+
+        vm.prank(owner);
+        namespace.unslotLabel("a");
+
+        (, string[] memory labels,) = namespace.listing();
+        assertEq(labels.length, 2);
+        assertEq(labels[0], "c", "the last one moved into the gap");
+        assertEq(labels[1], "b");
+    }
+
+    /// @notice The factory is the only answer to "which parents have slots".
+    function test_TheFactoryRecordsEveryNamespaceItOpens() public {
+        SlotNamespaceFactory factory = new SlotNamespaceFactory(ISlotFactory(SepoliaAddresses.SLOT_FACTORY));
+
+        // Hoisted, and it has to be: arguments are evaluated before the call,
+        // so an inline `namespace.terms()` would be the call `expectRevert`
+        // caught — and it succeeds.
+        SlotInit memory t = namespace.terms();
+
+        (SlotNamespace ns,) = factory.open(registry, PARENT_NODE, "slotsdemo.eth", t, owner);
+
+        assertEq(factory.count(), 1);
+        assertEq(factory.all()[0], address(ns));
+        assertEq(factory.namespaceOf(PARENT_NODE), address(ns));
+
+        vm.expectRevert(abi.encodeWithSelector(SlotNamespaceFactory.AlreadyOpened.selector, PARENT_NODE, address(ns)));
+        factory.open(registry, PARENT_NODE, "slotsdemo.eth", t, owner);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

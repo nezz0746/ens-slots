@@ -85,6 +85,16 @@ contract SlotNamespace is Ownable, ERC1155Holder {
      */
     bytes32 public immutable PARENT_NODE;
 
+    /**
+     * @notice The parent name in full, e.g. "community.eth".
+     *
+     * @dev Stored because {PARENT_NODE} is a hash and a hash cannot be shown
+     *      to anyone. A client listing namespaces has no other way back to the
+     *      human name, and there is no registry to ask: ENSv2 registries have
+     *      no concept of "their own name" at all.
+     */
+    string public parentName;
+
     /// @notice The terms every slot in this namespace is created with.
     /// @dev `hook` and `hookData` are left blank and filled per label.
     SlotInit private _terms;
@@ -108,6 +118,20 @@ contract SlotNamespace is Ownable, ERC1155Holder {
 
     /// @notice Nodes whose binding the owner has given up the right to remove.
     mapping(bytes32 node => bool) public permanent;
+
+    /**
+     * @notice Every node currently slotted, in slotting order.
+     *
+     * @dev On chain rather than left to an indexer. "Which subnames are
+     *      slotted" is the first question any client asks and there is no
+     *      event stream to derive it from without one — a page that cannot
+     *      list its own contents is not a page. Unslotting swaps in the last
+     *      element, so order is not stable and nothing should depend on it.
+     */
+    bytes32[] private _slotted;
+
+    /// @dev Position+1 in {_slotted}; zero means absent.
+    mapping(bytes32 node => uint256) private _slottedAt;
 
     /**
      * @notice Text records, scoped to the tenancy that wrote them.
@@ -151,12 +175,14 @@ contract SlotNamespace is Ownable, ERC1155Holder {
         IPermissionedRegistry registry,
         ISlotFactory slotFactory,
         bytes32 parentNode,
+        string memory parentName_,
         SlotInit memory terms_,
         address owner_
     ) Ownable(owner_) {
         REGISTRY = registry;
         SLOT_FACTORY = slotFactory;
         PARENT_NODE = parentNode;
+        parentName = parentName_;
 
         terms_.hook = address(0);
         terms_.hookData = bytes32(0);
@@ -175,7 +201,7 @@ contract SlotNamespace is Ownable, ERC1155Holder {
      *      because a hook is policy and policy is what differs between labels.
      *      The economic terms deliberately do not vary: price is self-assessed,
      *      so a more valuable label is priced higher by its own occupant and
-     *      pays more tax at the same rate. That is what Harberger is for.
+     *      pays more tax at the same rate. That is what common ownership is for.
      *
      * @param permanent_ Give up the right to ever {unslotLabel} this one. A
      *                   credible commitment to whoever occupies it, and
@@ -201,7 +227,7 @@ contract SlotNamespace is Ownable, ERC1155Holder {
         init.hookData = hookData;
         slot = SLOT_FACTORY.createSlot(init);
 
-        // Registered to this contract, at no expiry. The Harberger tax and
+        // Registered to this contract, at no expiry. The continuous tax and
         // liquidation already recycle an abandoned slot; a second clock would
         // only add a way for a paid-up occupant to lose their name for an
         // unrelated reason. It is also why `ROLE_RENEW` is never needed.
@@ -216,6 +242,8 @@ contract SlotNamespace is Ownable, ERC1155Holder {
 
         slotOfNode[node] = slot;
         labelOfNode[node] = label;
+        _slotted.push(node);
+        _slottedAt[node] = _slotted.length;
         if (permanent_) permanent[node] = true;
 
         emit LabelSlotted(node, label, slot, hook, permanent_);
@@ -241,6 +269,14 @@ contract SlotNamespace is Ownable, ERC1155Holder {
 
         address held = ISlot(slot).occupant();
         if (held != address(0)) revert SlotOccupied(held);
+
+        // Swap-and-pop, so the array stays dense.
+        uint256 i = _slottedAt[node] - 1;
+        bytes32 last = _slotted[_slotted.length - 1];
+        _slotted[i] = last;
+        _slottedAt[last] = i + 1;
+        _slotted.pop();
+        delete _slottedAt[node];
 
         delete slotOfNode[node];
         delete labelOfNode[node];
@@ -314,6 +350,32 @@ contract SlotNamespace is Ownable, ERC1155Holder {
 
     function terms() external view returns (SlotInit memory) {
         return _terms;
+    }
+
+    function slottedCount() external view returns (uint256) {
+        return _slotted.length;
+    }
+
+    /**
+     * @notice Everything a client needs to draw this namespace, in one call.
+     *
+     * @dev The per-slot numbers are deliberately NOT here. A caller reads
+     *      `getSlotInfo()` on each address, which is one multicall and is the
+     *      same data the slot's own page shows — copying price and deposit
+     *      into this struct would give a client two sources for one fact and
+     *      a way for them to disagree.
+     */
+    function listing() external view returns (bytes32[] memory nodes, string[] memory labels, address[] memory slots) {
+        uint256 n = _slotted.length;
+        nodes = new bytes32[](n);
+        labels = new string[](n);
+        slots = new address[](n);
+        for (uint256 i; i < n; ++i) {
+            bytes32 node = _slotted[i];
+            nodes[i] = node;
+            labels[i] = labelOfNode[node];
+            slots[i] = slotOfNode[node];
+        }
     }
 
     function nodeOf(string calldata label) external view returns (bytes32) {

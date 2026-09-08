@@ -44,7 +44,7 @@ library SepoliaAddresses {
 
     // ─── 0xSlots ────────────────────────────────────────────────────────────
 
-    /// @notice Creates one Harberger-taxed slot per slotted label.
+    /// @notice Creates one continuously taxed slot per slotted label.
     address internal constant SLOT_FACTORY = 0x14df7d78ef556A80F0AD3ede3F10F1e24f92E1cE;
 
     /// @notice The beacon implementation every slot proxy delegates to.

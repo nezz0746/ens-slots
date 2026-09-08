@@ -61,6 +61,7 @@ contract Deploy is Script {
             registry,
             ISlotFactory(SepoliaAddresses.SLOT_FACTORY),
             parentNode,
+            vm.envOr("PARENT_NAME", string("example.eth")),
             SlotInit({
                 recipient: recipient,
                 currency: IERC20(address(0)), // native ETH

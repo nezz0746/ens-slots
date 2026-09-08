@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/*
+ * ENS's palette, taken from ens.domains/brand.
+ *
+ * ── What is taken and what is not ───────────────────────────────────────────
+ *
+ * The COLOURS, verbatim. A palette is not a trademark, and using theirs is
+ * what makes a project sitting on top of ENS look like it belongs in the
+ * ecosystem rather than beside it.
+ *
+ * The MARKS are not used anywhere in this app. ENS's guidelines are explicit:
+ * third parties need a trademark licence, and must not "use the marks to
+ * imply sponsorship, endorsement, or a partnership that doesn't exist". This
+ * is an independent project. It wears their colours and its own symbol.
+ *
+ * ── Palette ─────────────────────────────────────────────────────────────────
+ *
+ *   ENS Blue      #0080BC     Light Blue    #CEE1E8
+ *   Dark Blue     #011A25     Midnight Blue #093C52
+ *   White         #F6F6F6     Gray          #4A5C63
+ *   Gray 2        #E5E5E5     Gray 3        #C4C7C8
+ *   Green         #007C23     Light Green   #C5DDCC
+ *   Magenta       #F53293     Light Magenta #F2C4DA
+ *   Yellow        #FFF72F     Light Yellow  #F8F6D6
+ *   Dark Brown    #674D49
+ *
+ * The three status tones map onto it directly, and the mapping is doing work
+ * rather than decorating: green for a funded position, yellow for one running
+ * out, magenta for one that can be taken right now. Yellow is far too bright
+ * to set type in, so warning text is Dark Brown on Light Yellow — which is
+ * their own pairing, and clears contrast where #FFF72F on white does not.
+ */
+@theme {
+  /* ink */
+  --color-ink: #011a25;
+  --color-ink-soft: #4a5c63;
+  --color-ink-faint: #93a1a6;
+
+  /* ground */
+  --color-surface: #ffffff;
+  --color-canvas: #f6f6f6;
+  --color-line: #e5e5e5;
+  --color-line-soft: #efefef;
+
+  /* ENS blue */
+  --color-brand: #0080bc;
+  --color-brand-ink: #093c52;
+  --color-brand-soft: #cee1e8;
+
+  /* status, from the extended palette */
+  --color-good: #007c23;
+  --color-good-soft: #c5ddcc;
+  --color-warn: #674d49;
+  --color-warn-soft: #f8f6d6;
+  --color-hot: #f53293;
+  --color-hot-soft: #f2c4da;
+
+  --radius-card: 1rem;
+
+  /*
+   * ENS sets its own type in Satoshi. The brand page publishes no font stack
+   * and no licence terms for it, so this stays on the system stack rather than
+   * pulling a webfont on an assumption. It is the one part of the identity
+   * this app does not borrow.
+   */
+  --font-sans:
+    ui-sans-serif, -apple-system, "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* Numbers in a column are a comparison the eye makes vertically. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The wash behind the page header.
+ *
+ * ENS leans on soft blue gradients over near-white; this is the cheapest
+ * honest version of that — one radial tint, no imagery, nothing that could be
+ * mistaken for their artwork.
+ */
+.ens-wash {
+  background:
+    radial-gradient(55rem 26rem at 8% 1rem, #cee1e8 0%, transparent 62%),
+    radial-gradient(38rem 20rem at 92% 3rem, #f2c4da88 0%, transparent 66%),
+    radial-gradient(30rem 16rem at 55% -4rem, #f8f6d6aa 0%, transparent 70%);
+  background-repeat: no-repeat;
+}

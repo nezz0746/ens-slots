@@ -31,7 +31,7 @@ interface ISlotFactory {
 }
 
 /**
- * @notice One Harberger-taxed position.
+ * @notice One continuously taxed position under common ownership.
  *
  * @dev {tenureId} is the important one here and it is not decoration. The
  *      protocol increments it on every buy and already uses it to scope
