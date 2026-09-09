@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * The text record key everything here lives under.
  *
- * Reverse-DNS on a domain we control, which is ENSIP-5's convention for keys
+ * Reverse-DNS on `ethglobal.com`, which is ENSIP-5's convention for keys
  * outside the standard set. The prefix is not about collisions — the namespace
  * owns its own record mapping and nothing else writes to it — it is about a
  * consumer being able to tell what it just parsed. A bare `sponsor` key that
@@ -14,7 +14,7 @@ import { z } from "zod";
  * type field and a type key cannot disagree, and publishing is one transaction
  * rather than one per field.
  */
-export const RECORD_KEY = "org.0xslots.sponsor";
+export const RECORD_KEY = "com.ethglobal.sponsor";
 
 /**
  * The payload version, carried IN the record rather than in the key.
@@ -90,7 +90,50 @@ export const address = z
   .regex(/^0x[0-9a-fA-F]{40}$/, "Not an address");
 
 /** A full http(s) URL. */
+/** A scheme, as URLs spell one: a letter then letters, digits, `+`, `-`, `.`. */
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * What somebody typed, as a URL.
+ *
+ * ── Why the scheme is optional ────────────────────────────────────────────
+ *
+ * Nobody types `https://`. They type `splits.org`, or they paste something
+ * that already has one. Demanding the scheme rejected the most natural input a
+ * form can receive, with an error about a prefix rather than about the address
+ * — so a missing one is filled in rather than complained about.
+ *
+ * ── Why only http and https ───────────────────────────────────────────────
+ *
+ * The value is written into a public record and handed to whatever renders it,
+ * which will put it in an `href`. `javascript:` and `data:` are URLs by every
+ * definition and neither belongs in one, so anything carrying a scheme has to
+ * carry one of two. A bare host gets `https://`, never `http://`: guessing the
+ * insecure one on somebody's behalf is not a guess worth making.
+ */
+export function normalizeUrl(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return trimmed;
+  return HAS_SCHEME.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 export const httpUrl = z
   .string()
-  .url("A full https:// URL is required")
-  .refine((u) => /^https?:\/\//i.test(u), "Must be http or https");
+  .trim()
+  .min(1, "An address is required")
+  .transform(normalizeUrl)
+  .refine(
+    (u) => /^https?:\/\//i.test(u),
+    "Only http and https addresses can be published",
+  )
+  .refine((u) => {
+    try {
+      // A hostname with a dot and no spaces. `new URL` alone accepts
+      // `https://nonsense`, which is a valid URL and not an address anybody
+      // can reach.
+      const { hostname } = new URL(u);
+      return hostname.includes(".") && !/\s/.test(hostname);
+    } catch {
+      return false;
+    }
+  }, "That does not look like a web address");
