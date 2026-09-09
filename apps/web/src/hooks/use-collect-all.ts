@@ -5,7 +5,7 @@ import { usePublicClient } from "wagmi";
 
 import { useTx } from "@/hooks/use-tx";
 import { slotAbi, slotFactoryAbi } from "@/lib/abis";
-import { addresses } from "@/lib/addresses";
+import { useAddresses } from "@/hooks/use-addresses";
 
 /**
  * Whether this chain's factory can collect a batch.
@@ -22,6 +22,7 @@ import { addresses } from "@/lib/addresses";
  */
 export function useFactorySupportsBatch() {
   const client = usePublicClient();
+  const addresses = useAddresses();
 
   const { data } = useQuery({
     queryKey: ["factory-version", addresses.slotFactory],
@@ -41,6 +42,30 @@ export function useFactorySupportsBatch() {
 
   return (data ?? 0n) >= 3n;
 }
+
+/**
+ * A gas limit for {collectAll}, computed rather than estimated.
+ *
+ * ── Why `eth_estimateGas` cannot be trusted here ────────────────────────────
+ *
+ * `collectAll` wraps each slot in `try this.collectFrom(...) catch {}`, so the
+ * OUTER call succeeds whether or not the inner ones did — a slot that runs out
+ * of gas leaves a zero in the returned array and the transaction still reports
+ * success. Estimation binary-searches for the lowest gas at which the outer
+ * call succeeds, and that is a limit where the later slots silently fail.
+ *
+ * Measured against the deployed factory: one slot costs ~116k and two ~172k,
+ * while the estimator answered 141k for the pair. The transaction landed with
+ * status 1, collected the first slot, skipped the second, and showed no error
+ * anywhere — which is exactly what "clicking collect does nothing" looks like
+ * from the outside.
+ *
+ * So: a floor with real headroom per slot. Unused gas is refunded, so the only
+ * cost of being generous is the block limit, and the only cost of being tight
+ * is money that silently does not move.
+ */
+const gasForCollectAll = (count: number) =>
+  120_000n + 150_000n * BigInt(count);
 
 /**
  * Push every slot's accrued tax to its recipient.
@@ -63,6 +88,7 @@ export function useFactorySupportsBatch() {
  */
 export function useCollectAll() {
   const batched = useFactorySupportsBatch();
+  const addresses = useAddresses();
   const { send, pending, error } = useTx();
   const queryClient = useQueryClient();
 
@@ -91,6 +117,7 @@ export function useCollectAll() {
         abi: slotFactoryAbi,
         functionName: "collectAll",
         args: [slots as `0x${string}`[]],
+        gas: gasForCollectAll(slots.length),
       });
       if (ok) await reread();
       return ok;

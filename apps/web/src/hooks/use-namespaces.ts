@@ -3,7 +3,8 @@
 import { useMemo } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
 
-import { addresses, isDeployed, KIND_SPONSORING } from "@/lib/addresses";
+import { KIND_SPONSORING } from "@/lib/addresses";
+import { useAddresses, useIsDeployed } from "@/hooks/use-addresses";
 import { namespaceAbi, namespaceFactoryAbi, slotAbi } from "@/lib/abis";
 
 /**
@@ -96,6 +97,8 @@ function toState(info: any): SlotState {
 }
 
 export function useNamespaces(only?: `0x${string}`) {
+  const addresses = useAddresses();
+  const isDeployed = useIsDeployed();
   const { data: all, isLoading: loadingAll } = useReadContract({
     address: addresses.namespaceFactory,
     abi: namespaceFactoryAbi,
@@ -113,7 +116,7 @@ export function useNamespaces(only?: `0x${string}`) {
   const { data: meta, isLoading: loadingMeta } = useReadContracts({
     contracts: list.flatMap((address) => [
       { address, abi: namespaceAbi, functionName: "parentName" } as const,
-      { address, abi: namespaceAbi, functionName: "PARENT_NODE" } as const,
+      { address, abi: namespaceAbi, functionName: "parentNode" } as const,
       { address, abi: namespaceAbi, functionName: "owner" } as const,
       { address, abi: namespaceAbi, functionName: "resolver" } as const,
       { address, abi: namespaceAbi, functionName: "listing" } as const,

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 
-import { DevBar } from "@/components/dev-bar";
+import { ChainSwitch } from "@/components/chain-switch";
+import { ConnectButton } from "@/components/connect-button";
 import { Mark } from "@/components/mark";
 import { Button } from "@/components/ui/button";
 import { UsdcWidget } from "@/components/usdc-widget";
@@ -33,7 +34,8 @@ export function SiteHeader() {
 
         <div className="ml-auto flex items-center gap-2">
           <UsdcWidget />
-          <DevBar />
+          <ChainSwitch />
+          <ConnectButton />
         </div>
       </div>
     </header>

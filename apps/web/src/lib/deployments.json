@@ -1,0 +1,24 @@
+{
+  "shared": {
+    "ensVerifiableFactory": "0x894bc9cC8ff1ad96B8a288C86A8C71D662C07780",
+    "ensUserRegistryImpl": "0x47B442d0CF617c41CAbAFf5f02f44DD1e5f72546",
+    "ensEthRegistry": "0x1D78834d97c1D7b1A38c1deDBD1a287cFEd3971e",
+    "ensEthRegistrar": "0x7d1B7f586a62Ac3F54b9A396849757814283270b",
+    "ensUniversalResolver": "0xd26f2040D083Af1cD2962ba303F4BEa0c4faf142",
+    "mockUsdc": "0xcBFD80F74375c54E545AF34788Ff465F96F66F05",
+    "slotFactory": "0x14df7d78ef556A80F0AD3ede3F10F1e24f92E1cE",
+    "minimumTenureHook": "0xB1e68532Ba467b2310A931abcDD682E718426c9C"
+  },
+  "chains": {
+    "11155111": {
+      "chainId": 11155111,
+      "namespaceFactory": "0xa91A7C2A745f66C9accE6c46a3eA39F525b059Da",
+      "namespaceResolver": "0xE322cDADB8fd511788F0fA25BffD794b7A946125"
+    },
+    "31337": {
+      "chainId": 31337,
+      "namespaceFactory": "0x513546D3B1a45C971C9B59a783E7C8470f36af55",
+      "namespaceResolver": "0x4BE5b9A89fca31eEE70D2Cb8a443910687406f78"
+    }
+  }
+}

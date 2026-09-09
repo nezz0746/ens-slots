@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { usePublicClient } from "wagmi";
+import { useMemo } from "react";
+import { usePublicClient, useReadContracts } from "wagmi";
 
 import { namespaceAbi } from "@/lib/abis";
 
@@ -22,12 +23,29 @@ import { namespaceAbi } from "@/lib/abis";
  *
  * ── Which is different from the sponsor record, deliberately ──────────────
  *
- * One level down, a sponsoring space carries `org.0xslots.sponsor` — a
+ * One level down, a sponsoring space carries `com.ethglobal.sponsor` — a
  * structured payload under a custom key, because "a token, on this chain, at
  * this address" is not a thing ENS has a key for. A profile is, so it doesn't
  * get one.
  */
 export const PROFILE_KEYS = ["avatar", "header", "description", "url"] as const;
+
+/**
+ * Where to find whoever opened the namespace, in the keys ENS already uses.
+ *
+ * Separate from {PROFILE_KEYS} because these are not part of what the app
+ * DRAWS — the cards render an avatar, a banner, a description and a link, and
+ * nothing here changes that. They are written because a namespace's owner has
+ * somewhere to be found, and every other ENS client already knows to look under
+ * these keys. Folding them into `PROFILE_KEYS` would have made the home page
+ * read three more records per namespace to render none of them.
+ */
+export const LINK_KEYS = ["com.twitter", "com.github", "org.telegram"] as const;
+
+/** Everything the owner can write on the parent name. */
+export const ROOT_KEYS = [...PROFILE_KEYS, ...LINK_KEYS] as const;
+
+export type RootKey = (typeof ROOT_KEYS)[number];
 
 export interface Profile {
   avatar: string;
@@ -130,6 +148,52 @@ export function useProfiles(
   });
 
   return { profiles: data ?? {}, isLoading };
+}
+
+/**
+ * What the parent name actually STORES, for the owner about to change it.
+ *
+ * ── Why this reads the contract, when {useProfiles} reads ENS ──────────────
+ *
+ * They are answering different questions. A reader asks what the name resolves
+ * to, so `useProfiles` goes through the Universal Resolver and only falls back
+ * here. An editor asks what is about to be overwritten, and the answer to that
+ * is whatever `setParentTexts` last wrote — the one store the Save button acts
+ * on.
+ *
+ * Reading resolution instead would be actively unsafe. A parent whose `.eth`
+ * name does not point at the namespace's resolver stores its records perfectly
+ * and resolves nothing, so the form would open with seven empty fields over
+ * seven populated records, and saving any one of them would blank the rest.
+ *
+ * Seven reads, folded into a single `aggregate3` by the transport.
+ */
+export function useParentRecords(address?: `0x${string}`) {
+  const { data, isLoading, refetch } = useReadContracts({
+    contracts: ROOT_KEYS.map(
+      (key) =>
+        ({
+          address,
+          abi: namespaceAbi,
+          functionName: "parentTextOf",
+          args: [key],
+        }) as const,
+    ),
+    query: { enabled: !!address },
+  });
+
+  const records = useMemo(() => {
+    const out = {} as Record<RootKey, string>;
+    for (const [i, key] of ROOT_KEYS.entries()) {
+      const entry = data?.[i];
+      out[key] = entry?.status === "success" ? (entry.result as string) : "";
+    }
+    return out;
+  }, [data]);
+
+  // `data` is undefined until the first read lands, and a form must not open on
+  // blanks it would then save over — see above.
+  return { records, isLoading, loaded: !!data, refetch };
 }
 
 /**

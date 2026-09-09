@@ -129,3 +129,30 @@ body {
     animation: none;
   }
 }
+
+/*
+ * A section that opens downward.
+ *
+ * ── Why a pixel height and not `grid-template-rows: 0fr → 1fr` ────────────
+ *
+ * The `fr` trick is the tidier one — it animates to the content's own height
+ * with nothing to measure — and it does not work here. Transitioning between
+ * two `fr` values, this engine interpolates to `0px` and stays there: the row
+ * computes 0 for as long as the transition is declared, and drops to the right
+ * 243.5px the instant it is removed. A collapsed section that reports itself
+ * open is worse than no animation, so the height is measured and animated in
+ * pixels, which every engine has interpolated for twenty years.
+ *
+ * The component sets `auto` once the opening transition has finished, so a
+ * form that grows a field afterwards is not clipped by a stale measurement.
+ */
+.reveal {
+  overflow: hidden;
+  transition: height 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    transition: none;
+  }
+}

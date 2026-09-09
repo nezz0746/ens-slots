@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 
@@ -9,182 +9,133 @@ import { Input } from "@/components/ui/input";
 import { useTx } from "@/hooks/use-tx";
 import { namespaceAbi } from "@/lib/abis";
 import type { Namespace } from "@/hooks/use-namespaces";
-import { addresses, KIND_COMMON, KIND_SPONSORING } from "@/lib/addresses";
-import { cn } from "@/lib/utils";
+import { KIND_SPONSORING } from "@/lib/addresses";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const ZERO32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 
 /**
- * Put another label on the market. Shown only to whoever opened the namespace.
+ * Put labels on the market. Shown only to whoever opened the namespace.
  *
- * Everything on this form changes what a holder is buying, which is why it is
- * here rather than behind a settings page:
+ * ── Why it queues ───────────────────────────────────────────────────────────
  *
- *   Kind — an identity, or a space whose whole purpose is to show what its
- *   holder publishes. It gates nothing; it tells a buyer which market they are
- *   entering, which is otherwise unknowable while the label is still empty.
+ * A namespace worth looking at opens three or four labels, and this used to be
+ * one signature each — four wallet confirmations for what is one decision, made
+ * in one sitting. `slotLabels` takes an array, so the queue below collects them
+ * and sends one transaction.
  *
- *   Permanent — gives up the right to ever take this label back, even while
- *   vacant. A promise to whoever holds it, and irreversible by construction.
+ * All or nothing, which is the contract's choice and the right one: a partial
+ * batch would leave you reading a receipt to work out which of your labels are
+ * live, and re-sending the array would then revert on the ones that already
+ * exist.
  *
- *   Minimum tenure — a window in which the holder cannot be outbid cheaply.
- *   It is the slot's one hook, which this system deliberately leaves free.
+ * ── Why a row has no options on it ──────────────────────────────────────────
+ *
+ * It used to carry three: kind, permanent, and a minimum tenure. Every space
+ * here is a sponsoring space now, so the kind carries no information; the
+ * minimum tenure is a promise the whole namespace makes, set once when it is
+ * opened and passed to every slot through the terms; and permanent is off until
+ * there is a reason to hand out an irreversible commitment through a form.
+ *
+ * What is left is the only thing that ever differed: the word.
  */
 export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
   const { address } = useAccount();
   const { send, pending, error } = useTx();
-  const [label, setLabel] = useState("");
-  const [permanent, setPermanent] = useState(false);
-  const [tenure, setTenure] = useState(false);
-  const [sponsoring, setSponsoring] = useState(false);
+  const [input, setInput] = useState("");
+  const [queue, setQueue] = useState<string[]>([]);
 
   const isOwner =
     !!address && namespace.owner.toLowerCase() === address.toLowerCase();
   if (!isOwner) return null;
 
-  const clean = label.trim().toLowerCase();
-  const taken = namespace.subnames.some((s) => s.label === clean);
+  const clean = input.trim().toLowerCase();
+  const taken =
+    !!clean &&
+    (namespace.subnames.some((s) => s.label === clean) ||
+      queue.includes(clean));
+
+  const add = () => {
+    if (!clean || taken) return;
+    setQueue((q) => [...q, clean]);
+    setInput("");
+  };
+
+  const open = async () => {
+    const ok = await send("slot", {
+      address: namespace.address,
+      abi: namespaceAbi,
+      functionName: "slotLabels",
+      args: [
+        queue.map((label) => ({
+          label,
+          kind: KIND_SPONSORING,
+          // Zero means "use the namespace's hook" — the minimum tenure set when
+          // it was opened. See {SlotNamespaceCuration-_slotOne}.
+          hook: ZERO,
+          hookData: ZERO32,
+          permanent: false,
+        })),
+      ],
+    });
+    if (ok) setQueue([]);
+  };
 
   return (
     <div className="space-y-3 rounded-[--radius-card] border border-dashed border-line bg-surface p-4">
       <p className="text-xs font-medium text-ink-soft">
-        Open another label — you own this namespace
+        Open labels — you own this namespace
       </p>
 
       <div className="flex gap-2">
         <Input
-          value={label}
+          value={input}
           placeholder="label"
-          onChange={(e) => setLabel(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
         />
-        <Button
-          disabled={!clean || taken || !!pending}
-          onClick={async () => {
-            await send("slot", {
-              address: namespace.address,
-              abi: namespaceAbi,
-              functionName: "slotLabel",
-              args: [
-                clean,
-                sponsoring ? KIND_SPONSORING : KIND_COMMON,
-                // hookData is the tenure window in seconds, and it must be
-                // zero when there is no hook — the slot refuses the pair
-                // otherwise.
-                tenure ? addresses.minimumTenureHook : ZERO,
-                tenure
-                  ? (`0x${(604_800).toString(16).padStart(64, "0")}` as `0x${string}`)
-                  : ZERO32,
-                permanent,
-              ],
-            });
-            setLabel("");
-          }}
-        >
+        <Button variant="outline" disabled={!clean || taken} onClick={add}>
           <Plus />
-          {pending === "slot" ? "Confirming…" : "Open"}
+          Add
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5">
-        <Kind
-          on={!sponsoring}
-          onClick={() => setSponsoring(false)}
-          title="Common"
-          note="An identity. The holder decides what it points at."
-        />
-        <Kind
-          on={sponsoring}
-          onClick={() => setSponsoring(true)}
-          title="Sponsoring"
-          note="An attention space. The holder publishes what it shows."
-        />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Toggle on={permanent} onClick={() => setPermanent(!permanent)}>
-          Permanent
-        </Toggle>
-        <Toggle on={tenure} onClick={() => setTenure(!tenure)}>
-          7-day minimum tenure
-        </Toggle>
-      </div>
-
-      <p className="text-[11px] leading-snug text-ink-faint">
-        {permanent
-          ? "You will never be able to take this label back, even while nobody holds it."
-          : "You can take this label back later, but only while nobody holds it."}
-      </p>
-
       {taken && (
-        <p className="text-[11px] text-warn">
-          {clean} is already open.
-        </p>
+        <p className="text-[11px] text-warn">{clean} is already open.</p>
       )}
+
+      {queue.map((label, i) => (
+        <div
+          key={label}
+          className="flex items-center justify-between gap-2 rounded-lg border border-line bg-canvas px-2.5 py-2"
+        >
+          <span className="text-xs font-semibold">
+            {label}
+            <span className="font-normal text-ink-faint">
+              .{namespace.parentName}
+            </span>
+          </span>
+          <button
+            type="button"
+            aria-label={`Remove ${label}`}
+            className="text-ink-faint hover:text-hot"
+            onClick={() => setQueue((q) => q.filter((_, j) => j !== i))}
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
+
+      {queue.length > 0 && (
+        <Button className="w-full" disabled={!!pending} onClick={open}>
+          {pending === "slot"
+            ? "Confirming…"
+            : `Open ${queue.length} label${queue.length > 1 ? "s" : ""} — one transaction`}
+        </Button>
+      )}
+
       {error && <p className="text-[11px] text-hot">{error}</p>}
     </div>
-  );
-}
-
-function Kind({
-  on,
-  onClick,
-  title,
-  note,
-}: {
-  on: boolean;
-  onClick: () => void;
-  title: string;
-  note: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-lg border px-2.5 py-2 text-left transition-colors",
-        on
-          ? "border-brand bg-brand-soft"
-          : "border-line bg-surface hover:border-brand/40",
-      )}
-    >
-      <div
-        className={cn(
-          "text-[11px] font-semibold",
-          on ? "text-brand-ink" : "text-ink",
-        )}
-      >
-        {title}
-      </div>
-      <div className="mt-0.5 text-[10px] leading-snug text-ink-faint">
-        {note}
-      </div>
-    </button>
-  );
-}
-
-function Toggle({
-  on,
-  onClick,
-  children,
-}: {
-  on: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
-        on
-          ? "border-brand bg-brand-soft text-brand-ink"
-          : "border-line text-ink-soft hover:border-brand/40",
-      )}
-    >
-      {children}
-    </button>
   );
 }

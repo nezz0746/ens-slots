@@ -2,6 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { DECIMALS, SYMBOL } from "@/lib/currency";
+
 /**
  * A token's dollar price, or null.
  *
@@ -14,7 +16,7 @@ import { useQuery } from "@tanstack/react-query";
  * Every figure on a page shares one query key, so a header showing three
  * amounts in dollars makes one request rather than three.
  */
-export function useTokenPrice(symbol = "ETH") {
+export function useTokenPrice(symbol = SYMBOL) {
   const { data } = useQuery({
     queryKey: ["token-price", symbol],
     // Slower than the chain reads on purpose. A price that moved a cent between
@@ -33,11 +35,17 @@ export function useTokenPrice(symbol = "ETH") {
   return data ?? null;
 }
 
-/** `amount` in wei, priced. Null in, null out — see {@link useTokenPrice}. */
+/**
+ * `amount` in the currency's own units, priced. Null in, null out.
+ *
+ * `decimals` defaults to the protocol's currency rather than to 18, so a
+ * caller cannot silently price a 6-decimal balance as an 18-decimal one — an
+ * error of a factor of a trillion that still renders as a plausible number.
+ */
 export function usdOf(
   wei: bigint,
   price: number | null,
-  decimals = 18,
+  decimals = DECIMALS,
 ): number | null {
   if (price === null) return null;
   // Through Number only after scaling down: a wei figure times a float would

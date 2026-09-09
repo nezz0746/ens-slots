@@ -137,22 +137,21 @@ export function useSponsorRecords({
  * asking about a known list is the only thing a client can do, and it is what
  * every ENS front end does.
  *
- * So this is ENSIP-5's standard keys plus the ones people actually set. A
- * record under some other key is invisible here, which is a real limitation
- * rather than a bug, and it is why the editor lets you type a key by hand.
+ * So this is a short list of the keys people actually set, drawn as a profile
+ * whether or not each one has a value — an empty row is an invitation, where
+ * an absent one is nothing at all. A record under some other key is invisible
+ * here, which is a real limitation rather than a bug — the profile is fixed,
+ * and a name carrying some other key keeps it, unread and unharmed.
  */
 export const KNOWN_TEXT_KEYS = [
-  "name",
-  "description",
   "avatar",
+  "header",
+  "description",
   "url",
-  "email",
   "location",
-  "notice",
-  "com.twitter",
+  "email",
   "com.github",
-  "com.discord",
-  "org.telegram",
+  "com.twitter",
 ] as const;
 
 export function useTextRecords({
@@ -172,15 +171,16 @@ export function useTextRecords({
     refetchInterval: 15_000,
     queryFn: async () => {
       if (!client) return [];
-      const found = await Promise.all(
-        keys.map(async (key) => {
-          const value = await client
-            .getEnsText({ name, key })
-            .catch(() => null);
-          return value ? { key, value } : null;
-        }),
+      // Every requested key comes back, set or not. The list is a fixed
+      // profile now, so dropping the empty ones would silently shorten it and
+      // leave nothing to click on for the record you came to add.
+      return await Promise.all(
+        keys.map(async (key) => ({
+          key,
+          value:
+            (await client.getEnsText({ name, key }).catch(() => null)) ?? "",
+        })),
       );
-      return found.filter((r): r is { key: string; value: string } => !!r);
     },
   });
 }

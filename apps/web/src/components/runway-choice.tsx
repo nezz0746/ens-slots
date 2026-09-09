@@ -16,6 +16,15 @@ import { describeRunway, rentFor } from "@/lib/runway";
  * given slot rejects, and hide the one it requires.
  *
  * Each option shows what it costs, which is the whole decision.
+ *
+ * One segmented control rather than three gapped cards. The multiplier is not
+ * shown: "×2" is a fact about how the option was derived, and the reader only
+ * needs the duration and the price. The first is marked as the minimum because
+ * that is the one thing about it worth knowing — below it the slot refuses.
+ *
+ * The selected option is a solid fill rather than an inset ring. A ring on a
+ * child of an `overflow-hidden` container is clipped square at the rounded
+ * corners, so the first and last options lost theirs on two sides.
  */
 export function RunwayChoice({
   window,
@@ -44,8 +53,8 @@ export function RunwayChoice({
   });
 
   return (
-    <div className="grid grid-cols-3 gap-1.5">
-      {options.map(({ m, seconds, cost }) => {
+    <div className="flex overflow-hidden rounded-lg border border-line">
+      {options.map(({ m, seconds, cost }, i) => {
         const active = value === m;
         return (
           <button
@@ -54,25 +63,32 @@ export function RunwayChoice({
             disabled={disabled}
             onClick={() => onChange(m, cost)}
             className={cn(
-              "rounded-lg border px-2 py-2 text-left transition-colors disabled:opacity-40",
+              "min-w-0 flex-1 px-2 py-1.5 text-left transition-colors disabled:opacity-40",
+              i > 0 && "border-l border-line-soft",
               active
-                ? "border-brand bg-brand-soft"
-                : "border-line bg-surface hover:border-brand/40",
+                ? "bg-brand text-white"
+                : "bg-surface text-ink hover:bg-canvas",
             )}
           >
             <div
               className={cn(
-                "text-[11px] font-medium",
-                active ? "text-brand-ink" : "text-ink-faint",
+                "truncate text-[11px] font-medium",
+                active ? "text-white/75" : "text-ink-faint",
               )}
             >
-              ×{m} · {describeRunway(seconds)}
+              {describeRunway(seconds)}
+              {i === 0 && " (min)"}
             </div>
-            <div className="text-[13px] font-semibold tabular-nums">
+            <div className="truncate text-[13px] font-semibold tabular-nums">
               {Number(formatUnits(cost, decimals)).toLocaleString(undefined, {
                 maximumFractionDigits: 4,
               })}
-              <span className="ml-1 text-[11px] font-normal text-ink-faint">
+              <span
+                className={cn(
+                  "ml-1 text-[11px] font-normal",
+                  active ? "text-white/70" : "text-ink-faint",
+                )}
+              >
                 {symbol}
               </span>
             </div>

@@ -4,10 +4,24 @@ import { useRef, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 
 import { cn } from "@/lib/utils";
-import { rentFor, MONTH_SECONDS } from "@/lib/runway";
 
-/** Percentage steps, laid out as one continuous scale from cut to raise. */
+/**
+ * Percentage steps, laid out as one continuous scale from cut to raise.
+ *
+ * Drawn as a segmented control in the same shape and colours as the runway
+ * scale below it — cuts red on the left, raises green on the right, one real
+ * division at the turn. They are the same kind of question asked about two
+ * different numbers, and two different-looking rows of buttons made them look
+ * like two different kinds of control.
+ *
+ * Unlike the runway scale there is no selected state, because these are not a
+ * selection: each tap COMPOUNDS off the current value, so any of them can be
+ * pressed repeatedly and none of them is ever "the one that is on".
+ */
 const STEPS = [-20, -10, -5, 5, 10, 20] as const;
+
+/** Where the cuts end and the raises begin — the one real division. */
+const TURN = STEPS.findIndex((s) => s > 0);
 
 /**
  * A valuation field, with the rent it implies beside it.
@@ -28,17 +42,17 @@ const STEPS = [-20, -10, -5, 5, 10, 20] as const;
  * refuses outright. Stepping raw units keeps every currency exact, so the
  * caller passes and receives `bigint` and no float ever touches the value.
  *
- * ── Why the rent is not optional ──────────────────────────────────────────
+ * ── Where the rent went ───────────────────────────────────────────────────
  *
  * Naming a price is also agreeing to pay tax on it, and the two numbers only
- * mean something together. A field that showed the valuation alone would let
- * someone raise their price to fend off a buyer without ever seeing what that
- * costs them per month — which is the exact trade common ownership exists to force.
+ * mean something together — so the rent is still always on screen, in the
+ * caller's summary beside everything else this form computes. It sat inline
+ * here first, which put a derived figure between two halves of one control and
+ * left each form with its results in two places.
  */
 export function ValuationInput({
   value,
   onChange,
-  taxBps,
   decimals = 18,
   symbol = "ETH",
   disabled,
@@ -47,7 +61,6 @@ export function ValuationInput({
   /** Raw units — the currency's own denomination, never a float. */
   value: bigint;
   onChange: (next: bigint) => void;
-  taxBps: bigint;
   decimals?: number;
   symbol?: string;
   disabled?: boolean;
@@ -93,13 +106,15 @@ export function ValuationInput({
     onChange(next > 0n ? next : 1n);
   };
 
-  const perMonth = rentFor(MONTH_SECONDS, value, taxBps);
-
   return (
-    <div className="space-y-1.5">
+    // No gap and no seam: the field and the steps are one control, so the
+    // field loses its bottom border and the strip its top, and both take the
+    // focus colour together. Two separately-rounded boxes read as a number and
+    // an unrelated row of buttons that happened to sit under it.
+    <div>
       <div
         className={cn(
-          "flex items-center gap-2 rounded-lg border bg-surface px-3 transition-colors",
+          "flex items-center gap-2 rounded-t-lg border border-b-0 bg-surface px-3 transition-colors",
           focused ? "border-brand" : "border-line",
         )}
       >
@@ -129,23 +144,34 @@ export function ValuationInput({
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <div className="flex gap-1">
-          {STEPS.map((s) => (
+      <div
+        className={cn(
+          "flex overflow-hidden rounded-b-lg border border-t-0 transition-colors",
+          focused ? "border-brand" : "border-line",
+        )}
+      >
+        {STEPS.map((s, i) => {
+          const cutting = s < 0;
+          return (
             <button
               key={s}
               type="button"
               disabled={disabled}
               onClick={() => step(s)}
-              className="rounded-md border border-line px-1.5 py-0.5 text-[11px] font-medium text-ink-soft transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+              className={cn(
+                "min-w-0 flex-1 py-1.5 text-[11px] font-medium tabular-nums transition-colors disabled:opacity-40",
+                i === TURN
+                  ? "border-l border-line"
+                  : i > 0 && "border-l border-line-soft",
+                cutting
+                  ? "bg-hot-soft/50 text-hot hover:bg-hot-soft"
+                  : "bg-good-soft/50 text-good hover:bg-good-soft",
+              )}
             >
               {s > 0 ? `+${s}` : s}%
             </button>
-          ))}
-        </div>
-        <span className="shrink-0 text-[11px] tabular-nums text-ink-faint">
-          {formatUnits(perMonth, decimals).slice(0, 8)} {symbol}/mo
-        </span>
+          );
+        })}
       </div>
     </div>
   );

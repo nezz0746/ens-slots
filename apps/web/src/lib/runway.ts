@@ -33,6 +33,29 @@ export function rentFor(
   return (price * taxBps * seconds) / (BASIS_POINTS * MONTH_SECONDS);
 }
 
+/**
+ * The escrow that FUNDS `seconds` at this price — `rentFor` rounded the other way.
+ *
+ * ceilDiv, mirroring `Slot._minDepositFor`. The two are not interchangeable:
+ * `rentFor` floors, which is right for "what has accrued" and wrong for "what
+ * must be posted". Sizing a top-up with the floored figure under-funds by a wei
+ * whenever the division leaves a remainder — which passes for a generous
+ * multiple and fails on exactly the minimum, the option chosen when funds are
+ * tight. Negative and zero durations cost nothing.
+ */
+export function depositForSeconds(
+  price: bigint,
+  taxBps: bigint,
+  seconds: bigint,
+): bigint {
+  const numerator = price * taxBps * seconds;
+  if (numerator <= 0n) return 0n;
+  const denominator = MONTH_SECONDS * BASIS_POINTS;
+  return (numerator + denominator - 1n) / denominator;
+}
+
+export const DAY_SECONDS = DAY;
+
 /** Whole units, largest one. "6d", "3h", "40m". */
 export function describeRunway(seconds: bigint, zeroLabel = "none"): string {
   if (seconds <= 0n) return zeroLabel;

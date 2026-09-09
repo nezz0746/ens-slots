@@ -3,6 +3,9 @@
 import { HandCoins, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatUnits } from "viem";
+import { useAccount } from "wagmi";
+
+import { DECIMALS, isDollarPegged, SYMBOL } from "@/lib/currency";
 
 import { Button } from "@/components/ui/button";
 import { useCollectAll } from "@/hooks/use-collect-all";
@@ -25,8 +28,13 @@ const TICK_MS = 2_000;
  * the slots, and the button next to it is what fetches it.
  */
 export function NamespaceSummary({ namespace }: { namespace: Namespace }) {
-  const price = useTokenPrice("ETH");
+  // Priced in the protocol's own currency. When that is a dollar stablecoin
+  // the USD line would just restate the figure above it, so it is dropped
+  // rather than printed twice.
+  const price = useTokenPrice();
+  const showUsd = !isDollarPegged();
   const { collectAll, batched, busy, error } = useCollectAll();
+  const { isConnected } = useAccount();
 
   const held = namespace.subnames.filter((s) => s.state && !s.state.isVacant);
 
@@ -59,14 +67,14 @@ export function NamespaceSummary({ namespace }: { namespace: Namespace }) {
     <div className="grid gap-px overflow-hidden rounded-[--radius-card] border border-line bg-line sm:grid-cols-3">
       <Figure
         label="Held at"
-        value={`${trim(namespace.totalValue)} ETH`}
-        sub={formatUsd(usdOf(namespace.totalValue, price))}
+        value={`${trim(namespace.totalValue)} ${SYMBOL}`}
+        sub={showUsd ? formatUsd(usdOf(namespace.totalValue, price)) : null}
       />
       <Figure
         label="Revenue"
-        value={`${trim(monthly)} ETH`}
+        value={`${trim(monthly)} ${SYMBOL}`}
         sub={
-          formatUsd(usdOf(monthly, price))
+          showUsd && formatUsd(usdOf(monthly, price))
             ? `${formatUsd(usdOf(monthly, price))} / month`
             : "per month"
         }
@@ -80,23 +88,30 @@ export function NamespaceSummary({ namespace }: { namespace: Namespace }) {
           <dd className="mt-0.5 truncate text-sm font-semibold tabular-nums">
             <Accruing wei={ticking} tick={tick} />
             <span className="ml-1 text-[11px] font-normal text-ink-faint">
-              ETH
+              {SYMBOL}
             </span>
           </dd>
           <dd className="text-[11px] text-ink-faint tabular-nums">
-            {formatUsd(usdOf(ticking, price)) ?? " "}
+            {(showUsd ? formatUsd(usdOf(ticking, price)) : null) ?? " "}
           </dd>
         </div>
 
         <Button
           size="sm"
           variant={collectableNow > 0n ? "primary" : "outline"}
-          disabled={busy || collectable.length === 0}
+          // Disabled without a wallet, rather than failing on click. The
+          // button used to invite a press it could never honour, and answered
+          // with a line of wagmi's internals under the card.
+          disabled={busy || !isConnected || collectable.length === 0}
           onClick={() => collectAll(collectable)}
           title={
-            batched
-              ? "One transaction, through the factory"
-              : `One transaction per slot — the factory on this chain predates collectAll`
+            !isConnected
+              ? "Connect a wallet to collect"
+              : collectable.length === 0
+                ? "Nothing has accrued yet"
+                : batched
+                  ? "One transaction, through the factory"
+                  : "One transaction per slot — the factory on this chain predates collectAll"
           }
         >
           {busy ? <Loader2 className="animate-spin" /> : <HandCoins />}
@@ -219,21 +234,21 @@ function Accruing({ wei, tick }: { wei: bigint; tick: number }) {
 }
 
 /**
- * Enough decimals to see it MOVE, which is more than enough to read it.
+ * How many decimals each figure earns, capped by what the token actually has.
  *
- * A namespace earning a fraction of an ETH a month accrues tens of gwei a
- * second, so a two-second tick moves the eighth decimal and nothing above it.
- * At six — where this started — the live figure rendered as a constant and the
- * flash animated a number that never changed, which is worse than not animating
- * it: it says money is arriving and shows the same total either way.
+ * The ticking figure needs enough to be seen moving — an accrual of a few
+ * hundredths of a cent a second is invisible at two — but never more than the
+ * currency carries. Eight decimals of a six-decimal token is two digits the
+ * balance cannot express: `formatUnits` returns six and the padding invented
+ * the rest, so the figure ended in a permanent `00` that looked like precision.
  *
- * Eight is only for the ticking figure. The static ones read as money.
+ * The static figures are money and read as money.
  */
-const TICKING_DECIMALS = 8;
-const STATIC_DECIMALS = 6;
+const TICKING_DECIMALS = Math.min(8, DECIMALS);
+const STATIC_DECIMALS = Math.min(2, DECIMALS);
 
 function trim(wei: bigint, decimals = STATIC_DECIMALS): string {
-  const s = formatUnits(wei, 18);
+  const s = formatUnits(wei, DECIMALS);
   const [whole, frac = ""] = s.split(".");
   return `${whole}.${frac.slice(0, decimals).padEnd(decimals, "0")}`;
 }

@@ -11,6 +11,34 @@
  * a function.
  */
 
+const TERMS = {
+  name: "terms",
+  type: "tuple",
+  components: [
+    { name: "recipient", type: "address" },
+    { name: "currency", type: "address" },
+    { name: "manager", type: "address" },
+    { name: "hook", type: "address" },
+    { name: "hookData", type: "bytes32" },
+    { name: "taxBps", type: "uint256" },
+    { name: "minDepositSeconds", type: "uint256" },
+    { name: "mutableTax", type: "bool" },
+    { name: "mutableHook", type: "bool" },
+  ],
+} as const;
+
+/** `SlotNamespaceCuration.LabelSpec` — one label to open. */
+const LABEL_SPEC = {
+  type: "tuple[]",
+  components: [
+    { name: "label", type: "string" },
+    { name: "kind", type: "uint8" },
+    { name: "hook", type: "address" },
+    { name: "hookData", type: "bytes32" },
+    { name: "permanent", type: "bool" },
+  ],
+} as const;
+
 export const namespaceFactoryAbi = [
   {
     type: "function",
@@ -28,39 +56,47 @@ export const namespaceFactoryAbi = [
   },
   {
     type: "function",
-    name: "resolverOf",
+    name: "resolver",
     stateMutability: "view",
-    inputs: [{ name: "parentNode", type: "bytes32" }],
+    inputs: [],
     outputs: [{ type: "address" }],
   },
+  {
+    type: "function",
+    name: "implementation",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  /**
+   * One call stands a whole namespace up: it deploys the UserRegistry, grants
+   * the namespace its roles inside that registry's own initializer, opens the
+   * namespace, points it at the shared resolver, and slots the first labels.
+   *
+   * Pass `registry: zeroAddress` to have it deploy one. Passing an existing
+   * registry skips the deployment, and the roles are then the caller's to grant.
+   */
   {
     type: "function",
     name: "open",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "registry", type: "address" },
-      { name: "parentNode", type: "bytes32" },
-      { name: "parentName", type: "string" },
       {
-        name: "terms",
+        name: "p",
         type: "tuple",
         components: [
-          { name: "recipient", type: "address" },
-          { name: "currency", type: "address" },
-          { name: "manager", type: "address" },
-          { name: "hook", type: "address" },
-          { name: "hookData", type: "bytes32" },
-          { name: "taxBps", type: "uint256" },
-          { name: "minDepositSeconds", type: "uint256" },
-          { name: "mutableTax", type: "bool" },
-          { name: "mutableHook", type: "bool" },
+          { name: "registry", type: "address" },
+          { name: "parentNode", type: "bytes32" },
+          { name: "parentName", type: "string" },
+          TERMS,
+          { name: "owner", type: "address" },
+          { ...LABEL_SPEC, name: "labels" },
         ],
       },
-      { name: "owner", type: "address" },
     ],
     outputs: [
       { name: "namespace", type: "address" },
-      { name: "resolver", type: "address" },
+      { name: "registry", type: "address" },
     ],
   },
 ] as const;
@@ -75,10 +111,24 @@ export const namespaceAbi = [
   },
   {
     type: "function",
-    name: "PARENT_NODE",
+    name: "parentNode",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "registry",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "version",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [{ type: "uint64" }],
   },
   {
     type: "function",
@@ -156,6 +206,17 @@ export const namespaceAbi = [
   },
   {
     type: "function",
+    name: "setTexts",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "keys", type: "string[]" },
+      { name: "values", type: "string[]" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "setText",
     stateMutability: "nonpayable",
     inputs: [
@@ -191,9 +252,9 @@ export const namespaceAbi = [
   },
   {
     type: "function",
-    name: "repointLabel",
+    name: "repointLabels",
     stateMutability: "nonpayable",
-    inputs: [{ name: "label", type: "string" }],
+    inputs: [{ name: "labels", type: "string[]" }],
     outputs: [],
   },
   {
@@ -214,11 +275,44 @@ export const namespaceAbi = [
   },
   {
     type: "function",
+    name: "slotLabels",
+    stateMutability: "nonpayable",
+    inputs: [{ ...LABEL_SPEC, name: "specs" }],
+    outputs: [{ type: "address[]" }],
+  },
+  {
+    type: "function",
     name: "unslotLabel",
     stateMutability: "nonpayable",
     inputs: [{ name: "label", type: "string" }],
     outputs: [],
   },
+  {
+    type: "function",
+    name: "setTexts",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "keys", type: "string[]" },
+      { name: "values", type: "string[]" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setParentTexts",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "keys", type: "string[]" },
+      { name: "values", type: "string[]" },
+    ],
+    outputs: [],
+  },
+  /**
+   * Mixed batches an array cannot express — labels plus a profile, say.
+   * `delegatecall` to self preserves `msg.sender`, so `onlyOwner` still applies
+   * to every inner call and this confers no authority the caller lacked.
+   */
 ] as const;
 
 /**
@@ -352,6 +446,22 @@ export const slotAbi = [
     stateMutability: "nonpayable",
     inputs: [],
     outputs: [],
+  },
+  /**
+   * Inherited from OpenZeppelin's `Multicall`, and NOT payable — which is why
+   * a native top-up can never be batched with a reprice and has to go first on
+   * its own. See `HoldForm`.
+   *
+   * This entry belongs here and only here. A copy of it sat in `namespaceAbi`
+   * for a contract that has no `multicall`, and `grep` finding that copy is
+   * how a hold-form submit shipped against a `slotAbi` that lacked it.
+   */
+  {
+    type: "function",
+    name: "multicall",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "data", type: "bytes[]" }],
+    outputs: [{ type: "bytes[]" }],
   },
 ] as const;
 

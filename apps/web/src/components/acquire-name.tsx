@@ -8,10 +8,9 @@ import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/input";
-import { useTx } from "@/hooks/use-tx";
+import { useBatch, useTx } from "@/hooks/use-tx";
 import { ethRegistrarAbi, mockUsdcAbi } from "@/lib/abis";
-import { addresses } from "@/lib/addresses";
-import { IS_LOCAL } from "@/lib/chains";
+import { useAddresses, useIsLocal } from "@/hooks/use-addresses";
 import { cn } from "@/lib/utils";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
@@ -33,19 +32,47 @@ const YEAR = 31_536_000n;
  *     MockUSDC, which anyone can mint — the faucet is in the header.
  *   * The secret must survive between the two transactions. It is generated
  *     once and held here; reloading the page mid-flow means committing again.
+ *
+ * ── The name arrives already wired ──────────────────────────────────────────
+ *
+ * `register` takes a `subregistry` and a `resolver`, and both are otherwise two
+ * more calls the parent's owner has to make afterwards — the two the README
+ * used to list as "still to do", and the two people forget, because a name that
+ * skips them registers and mints and then silently resolves to nothing.
+ *
+ * The registry does not exist yet at this point, which is exactly why this
+ * works: ENS derives its address by CREATE2, so `predictRegistry` can answer
+ * before anything is deployed. Both values go into the commitment as well as
+ * the registration, because the commitment is a hash of the whole intent and a
+ * mismatch in either one makes the reveal fail.
  */
 export function AcquireName({
   label,
-  onOwned,
+  predictRegistry,
 }: {
   label: string;
-  onOwned: () => void;
+  predictRegistry: () => Promise<`0x${string}` | null>;
 }) {
   const { address } = useAccount();
   const client = usePublicClient();
+  const addresses = useAddresses();
+  const isLocal = useIsLocal();
   const { send, pending, error } = useTx();
+  /**
+   * Approving and committing touch two different contracts, so no contract can
+   * put them in one transaction — only the wallet can. Batched where the wallet
+   * supports EIP-5792, sent one after the other where it does not.
+   */
+  const batch = useBatch();
+  /** Whether approve and commit arrive as one signature, and so as one step. */
+  const folded = batch.atomic;
 
   const [secret, setSecret] = useState<`0x${string}` | null>(null);
+  /**
+   * Held from commit to reveal for the same reason `secret` is: the commitment
+   * covers it, so the registration has to repeat it exactly.
+   */
+  const [subregistry, setSubregistry] = useState<`0x${string}` | null>(null);
   const [committedAt, setCommittedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const [registered, setRegistered] = useState(false);
@@ -113,11 +140,21 @@ export function AcquireName({
 
   async function commit() {
     if (!address || !secret || !client) return;
+
+    const registry = (await predictRegistry()) ?? ZERO;
     const hash = await client.readContract({
       address: addresses.ensEthRegistrar,
       abi: ethRegistrarAbi,
       functionName: "makeCommitment",
-      args: [label, address, secret, ZERO, ZERO, YEAR, ZERO32],
+      args: [
+        label,
+        address,
+        secret,
+        registry,
+        addresses.namespaceResolver,
+        YEAR,
+        ZERO32,
+      ],
     });
     const r = await send("commit", {
       address: addresses.ensEthRegistrar,
@@ -125,11 +162,14 @@ export function AcquireName({
       functionName: "commit",
       args: [hash],
     });
-    if (r) setCommittedAt(Math.floor(Date.now() / 1000));
+    if (r) {
+      setSubregistry(registry);
+      setCommittedAt(Math.floor(Date.now() / 1000));
+    }
   }
 
   async function register() {
-    if (!address || !secret) return;
+    if (!address || !secret || !subregistry) return;
     const r = await send("register", {
       address: addresses.ensEthRegistrar,
       abi: ethRegistrarAbi,
@@ -138,8 +178,8 @@ export function AcquireName({
         label,
         address,
         secret,
-        ZERO,
-        ZERO,
+        subregistry,
+        addresses.namespaceResolver,
         YEAR,
         addresses.mockUsdc,
         ZERO32,
@@ -148,7 +188,54 @@ export function AcquireName({
     if (r) {
       setRegistered(true);
       recheck();
-      onOwned();
+    }
+  }
+
+  /**
+   * The allowance and the commitment in one signature.
+   *
+   * Only reachable when the wallet reports atomic support. It cannot swallow
+   * the commit half: the two are all-or-nothing, so an approval that lands
+   * without its commitment is not a state this can leave behind.
+   */
+  async function approveAndCommit() {
+    if (!address || !secret || !client) return;
+
+    const registry = (await predictRegistry()) ?? ZERO;
+    const hash = await client.readContract({
+      address: addresses.ensEthRegistrar,
+      abi: ethRegistrarAbi,
+      functionName: "makeCommitment",
+      args: [
+        label,
+        address,
+        secret,
+        registry,
+        addresses.namespaceResolver,
+        YEAR,
+        ZERO32,
+      ],
+    });
+
+    const ok = await batch.sendBatch("acquire", [
+      {
+        address: addresses.mockUsdc,
+        abi: mockUsdcAbi,
+        functionName: "approve",
+        args: [addresses.ensEthRegistrar, total],
+      },
+      {
+        address: addresses.ensEthRegistrar,
+        abi: ethRegistrarAbi,
+        functionName: "commit",
+        args: [hash],
+      },
+    ]);
+
+    if (ok) {
+      setSubregistry(registry);
+      setCommittedAt(Math.floor(Date.now() / 1000));
+      recheckAllowance();
     }
   }
 
@@ -206,18 +293,35 @@ export function AcquireName({
         </div>
       </div>
 
+      {/*
+       * One step or two, depending on the wallet.
+       *
+       * Approving and committing touch different contracts, so only the wallet
+       * can put them in one transaction. Where it can, this IS the commit and
+       * showing a second "Commit" step underneath contradicted it — the screen
+       * said one signature and then listed two things to run.
+       */}
       <Step
         n={1}
-        title="Approve the registrar"
+        title={folded ? "Approve and commit" : "Approve the registrar"}
         note={
-          funded
-            ? "It pulls the fee from you when you register."
-            : "You do not hold enough — mint some from the header."
+          !funded
+            ? "You do not hold enough — mint some from the header."
+            : folded
+              ? "One signature: the fee allowance and the commitment together."
+              : "It pulls the fee from you when you register."
         }
-        done={approved}
-        ready={!!address && funded && !approved}
-        busy={pending === "approve"}
+        done={folded ? committedAt !== null : approved}
+        ready={!!address && funded && (folded ? committedAt === null : !approved)}
+        busy={pending === "approve" || batch.pending === "acquire"}
+        error={
+          pending === null && !approved ? (error ?? batch.error) : null
+        }
         onRun={async () => {
+          if (batch.atomic) {
+            await approveAndCommit();
+            return;
+          }
           await send("approve", {
             address: addresses.mockUsdc,
             abi: mockUsdcAbi,
@@ -228,18 +332,21 @@ export function AcquireName({
         }}
       />
 
-      <Step
-        n={2}
-        title="Commit"
-        note="A hash of what you intend, so nobody can front-run the reveal."
-        done={committedAt !== null}
-        ready={approved && committedAt === null}
-        busy={pending === "commit"}
-        onRun={commit}
-      />
+      {!folded && (
+        <Step
+          n={2}
+          title="Commit"
+          note="A hash of what you intend, so nobody can front-run the reveal."
+          done={committedAt !== null}
+          ready={approved && committedAt === null}
+          busy={pending === "commit"}
+          error={pending === null && approved && committedAt === null ? error : null}
+          onRun={commit}
+        />
+      )}
 
       <div className="flex items-center gap-3 px-5 py-3.5">
-        <Bullet n={3} done={ready} active={committedAt !== null && !ready} />
+        <Bullet n={folded ? 2 : 3} done={ready} active={committedAt !== null && !ready} />
         <div className="flex-1">
           <p className={cn("text-sm", ready && "text-ink-faint line-through")}>
             Wait {wait} seconds
@@ -252,7 +359,7 @@ export function AcquireName({
                 : `${wait - elapsed}s to go.`}
           </p>
         </div>
-        {IS_LOCAL && committedAt !== null && !ready && (
+        {isLocal && committedAt !== null && !ready && (
           <Button size="sm" variant="outline" onClick={skipAhead}>
             <Clock />
             Skip
@@ -261,18 +368,17 @@ export function AcquireName({
       </div>
 
       <Step
-        n={4}
+        n={folded ? 3 : 4}
         title="Register"
-        note="Reveals the commitment and mints the name to you."
+        note="Mints the name to you, pointing at your registry and resolver."
         done={registered}
         ready={ready && !registered}
         busy={pending === "register"}
+        error={pending === null && ready && !registered ? error : null}
         onRun={register}
       />
 
-      {error && (
-        <p className="px-5 py-3 text-xs text-hot">{error}</p>
-      )}
+
     </Card>
   );
 }
@@ -285,6 +391,7 @@ function Step({
   ready,
   busy,
   onRun,
+  error,
 }: {
   n: number;
   title: string;
@@ -293,6 +400,15 @@ function Step({
   ready: boolean;
   busy: boolean;
   onRun: () => void;
+  /**
+   * Shown here rather than at the foot of the card.
+   *
+   * It used to render after step 4, so a refusal on step 1 put its reason
+   * several hundred pixels below the button that caused it — off screen on the
+   * step people actually start from. A failure nobody sees is indistinguishable
+   * from a button that does nothing.
+   */
+  error?: string | null;
 }) {
   return (
     <div className="flex items-center gap-3 px-5 py-3.5">
@@ -302,15 +418,26 @@ function Step({
           {title}
         </p>
         <p className="mt-0.5 text-[11px] leading-snug text-ink-faint">{note}</p>
+        {error && (
+          <p className="mt-1 text-[11px] leading-snug text-hot">{error}</p>
+        )}
       </div>
-      <Button
-        size="sm"
-        variant={ready ? "primary" : "outline"}
-        disabled={!ready || busy}
-        onClick={onRun}
-      >
-        {busy ? <Loader2 className="animate-spin" /> : done ? "Done" : "Run"}
-      </Button>
+      {/*
+        * A button only where there is something to press.
+        *
+        * Every step used to carry a disabled "Run", so four buttons were on
+        * screen and exactly one of them did anything — which is a puzzle, not a
+        * sequence. A step that is finished says so, a step that is waiting on an
+        * earlier one says nothing at all, and the single live button is the
+        * answer to "what do I do now".
+        */}
+      {done ? (
+        <span className="text-[11px] font-medium text-good">Done</span>
+      ) : ready || busy ? (
+        <Button size="sm" disabled={busy} onClick={onRun}>
+          {busy ? <Loader2 className="animate-spin" /> : "Run"}
+        </Button>
+      ) : null}
     </div>
   );
 }

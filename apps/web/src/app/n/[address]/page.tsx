@@ -86,9 +86,8 @@ export default function NamespacePage({
           {namespace.parentName}
         </h1>
         <p className="mt-1 text-xs text-ink-faint">
-          {namespace.subnames.length} slotted ·{" "}
-          {namespace.subnames.filter((s) => s.sponsoring).length} sponsoring ·{" "}
-          {namespace.occupied} held · opened by{" "}
+          {namespace.subnames.length} spaces · {namespace.occupied} held ·
+          opened by{" "}
           {shortAddress(namespace.owner)}
         </p>
 
@@ -97,8 +96,21 @@ export default function NamespacePage({
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,380px)]">
-        <div className="space-y-3">
+      {/*
+       * Flush columns, sharing one hairline, like the summary above them.
+       *
+       * Not the summary's own trick — `gap-px` over a `bg-line` grid — because
+       * these columns are `self-start` and sticky, so they are different
+       * heights and the grid's background would show as a grey block under the
+       * short ones. Instead each column keeps its own border and the next is
+       * pulled a pixel left, so the two borders land on the same pixel. The
+       * inner corners are squared for the same reason: three rounded boxes
+       * touching read as three boxes, and this should read as one.
+       *
+       * Vertical gap survives, for the stacked layout below `xl`.
+       */}
+      <div className="grid gap-y-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,380px)] xl:gap-y-0">
+        <div className="space-y-3 xl:[&>*:first-child]:rounded-r-none">
         <Card className="divide-y divide-line-soft overflow-hidden">
           {namespace.subnames.map((s) => {
             const st = s.state;
@@ -127,20 +139,13 @@ export default function NamespacePage({
                         .{namespace.parentName}
                       </span>
                     </span>
-                    {/* The TYPE where there is one, since it says more than
-                        the kind does: "pool" tells you what you are looking at,
-                        "sponsoring" only tells you what the label is for. The
-                        kind shows through when the space is still empty. */}
-                    {records?.[s.node] ? (
+                    {/* What the space is SHOWING. Every space here is a
+                        sponsoring space, so the kind said nothing; "pool" or
+                        "post" tells you what you are actually looking at. */}
+                    {records?.[s.node] && (
                       <span className="shrink-0 rounded border border-brand-soft bg-brand-soft px-1 py-px text-[9px] font-semibold tracking-wide text-brand-ink uppercase">
                         {records[s.node]?.type}
                       </span>
-                    ) : (
-                      s.sponsoring && (
-                        <span className="shrink-0 rounded border border-line bg-canvas px-1 py-px text-[9px] font-semibold tracking-wide text-ink-faint uppercase">
-                          Sponsoring
-                        </span>
-                      )
                     )}
                   </div>
                   <div className="mt-0.5 truncate text-[11px] text-ink-faint">
@@ -172,8 +177,8 @@ export default function NamespacePage({
         <SlotLabelForm namespace={namespace} />
         </div>
 
-        <div className="xl:sticky xl:top-20 xl:self-start">
-          <Card className="p-4">
+        <div className="xl:sticky xl:top-20 xl:self-start xl:-ml-px">
+          <Card className="p-4 xl:rounded-none">
             {current ? (
               <NameDetails
                 key={current.node}
@@ -188,8 +193,8 @@ export default function NamespacePage({
           </Card>
         </div>
 
-        <div className="xl:sticky xl:top-20 xl:self-start">
-          <Card className="overflow-hidden">
+        <div className="xl:sticky xl:top-20 xl:self-start xl:-ml-px">
+          <Card className="overflow-hidden xl:rounded-l-none">
             {current ? (
               /* Keyed on the subname so picking another one RESETS the form.
                  Without it the price field kept the last name's number, and

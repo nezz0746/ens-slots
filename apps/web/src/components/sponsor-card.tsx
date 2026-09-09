@@ -39,43 +39,84 @@ export function SponsorCard({
   record,
   via,
   className,
+  compact,
 }: {
   record: SponsorRecord;
   /** Which path answered — see `useSponsorRecord`. */
   via?: "ens" | "contract";
   className?: string;
+  /**
+   * Drawn as a record's value rather than as a panel of its own.
+   *
+   * Sheds the border, the provenance bar and the type-specific strip, and
+   * gives the tagline one line instead of two — a value in a list has to be
+   * the height of a row, and the full card is three times that. What survives
+   * is what a row needs: the picture, the name, and one line of what it is.
+   *
+   * Everything dropped is a repetition in this position. The border and tint
+   * belong to the row; the provenance bar restates the label the row already
+   * carries; the detail strip is the reason to open the record, not a reason
+   * to make every row taller.
+   *
+   * It also stops being a LINK. The row it sits in is a button that opens the
+   * editor, and an anchor across most of that row's width swallowed the click:
+   * aiming at the record you wanted to change opened the sponsor's website
+   * instead. The card is a value being displayed here, not a destination.
+   */
+  compact?: boolean;
 }) {
   const display = displayOf(record);
   const href = destinationOf(record);
 
   const body = (
-    <div className={cn("flex gap-3 p-3", className)}>
-      <Thumb src={display.image} alt="" />
+    <div
+      className={cn(
+        "flex",
+        compact ? "items-center gap-2" : "gap-3 p-3",
+        className,
+      )}
+    >
+      <Thumb src={display.image} alt="" compact={compact} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-1.5">
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold">
+          <p
+            className={cn(
+              "min-w-0 flex-1 truncate font-semibold",
+              compact ? "text-[11px] leading-tight" : "text-sm",
+            )}
+          >
             {display.name}
           </p>
-          {href && (
+          {href && !compact && (
             <ArrowUpRight className="mt-0.5 size-3.5 shrink-0 text-ink-faint" />
           )}
         </div>
 
         {display.tagline && (
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-ink-soft">
+          <p
+            className={cn(
+              "text-[11px] leading-snug text-ink-soft",
+              compact ? "truncate" : "mt-0.5 line-clamp-2",
+            )}
+          >
             {display.tagline}
           </p>
         )}
 
-        <Detail record={record} />
+        {!compact && <Detail record={record} />}
       </div>
     </div>
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface">
-      {href ? (
+    <div
+      className={cn(
+        "overflow-hidden",
+        !compact && "rounded-xl border border-line bg-surface",
+      )}
+    >
+      {href && !compact ? (
         <a
           href={href}
           target="_blank"
@@ -88,7 +129,7 @@ export function SponsorCard({
         body
       )}
 
-      <Provenance record={record} via={via} />
+      {!compact && <Provenance record={record} via={via} />}
     </div>
   );
 }
@@ -245,12 +286,26 @@ function Provenance({
  * fallback a rotted one draws the browser's broken-image box, which reads as
  * this app being broken rather than as an image being gone.
  */
-function Thumb({ src, alt }: { src: string; alt: string }) {
+function Thumb({
+  src,
+  alt,
+  compact,
+}: {
+  src: string;
+  alt: string;
+  compact?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
+  const size = compact ? "size-8" : "size-12";
 
   if (!src || failed) {
     return (
-      <div className="grid size-12 shrink-0 place-items-center rounded-lg border border-line bg-canvas text-ink-faint">
+      <div
+        className={cn(
+          "grid shrink-0 place-items-center rounded-lg border border-line bg-canvas text-ink-faint",
+          size,
+        )}
+      >
         <ImageOff className="size-4" />
       </div>
     );
@@ -269,7 +324,10 @@ function Thumb({ src, alt }: { src: string; alt: string }) {
       // `bg-canvas`, because a great many token logos are a light glyph on a
       // transparent ground — CLANKER's is nearly white — and on a white card
       // those render as an empty box that looks like a failed load.
-      className="size-12 shrink-0 rounded-lg border border-line bg-canvas object-cover"
+      className={cn(
+        "shrink-0 rounded-lg border border-line bg-canvas object-cover",
+        size,
+      )}
     />
   );
 }

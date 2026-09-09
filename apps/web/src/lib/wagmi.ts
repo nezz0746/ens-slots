@@ -1,21 +1,17 @@
-"use client";
+import { cookieStorage, createConfig, createStorage, http } from "wagmi";
+import { injected, mock } from "wagmi/connectors";
 
-import { createConfig, http } from "wagmi";
-import { mock } from "wagmi/connectors";
-import { injected } from "wagmi/connectors";
-
-import { activeChain, IS_LOCAL } from "./chains";
+import { anvilFork, hackathonSepolia, IS_DEV } from "./chains";
 
 /**
  * anvil's default accounts, as click-to-connect identities.
  *
- * Carried over from 0xSlots, where the same three names made every
- * multi-party flow demonstrable without three browser profiles and three
- * seed phrases. Buying a slot from someone needs a someone.
+ * Carried over from 0xSlots, where the same names made every multi-party flow
+ * demonstrable without three browser profiles and three seed phrases. Buying a
+ * space from someone needs a someone.
  *
- * The mock connector answers with `config.chains[0]`, so the fork has to be
- * first in the list — otherwise every write is prepared for the wrong chain
- * and fails on send with a chain-mismatch nobody can read.
+ * Development only, like the fork they belong to — these are published private
+ * keys, and a deployed build must not offer them as a way to sign anything.
  */
 export const DEV_ACCOUNTS = [
   { name: "Deployer", address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" },
@@ -24,13 +20,52 @@ export const DEV_ACCOUNTS = [
   { name: "Carol", address: "0x90F79bf6EB2c4f870365E785982E1f101E93b906" },
 ] as const;
 
+/**
+ * Both chains, in one config.
+ *
+ * ── The fork stays first ────────────────────────────────────────────────────
+ *
+ * The mock connectors answer with `config.chains[0]`, so the fork has to lead
+ * the list — otherwise the demo accounts prepare every write for Sepolia and it
+ * fails on send with a chain mismatch nobody can read. A real wallet is
+ * unaffected: `injected` reports whichever chain it is actually on.
+ *
+ * The demo accounts are offered on both chains rather than filtered here, and
+ * that is deliberate — `wagmi` decides connectors once, at config time, while
+ * the chain changes at runtime. {DevBar} hides them when the connected chain is
+ * not the fork, which is the check that can actually see the current answer.
+ */
+/**
+ * MetaMask, and in development the demo accounts alongside it.
+ *
+ * `injected({ target })` rather than wagmi's `metaMask()` connector: the latter
+ * pulls in the MetaMask SDK and its own modal for a case this app does not have
+ * — mobile deep-linking — while the target form talks to the extension that is
+ * already in the page and adds no dependency.
+ *
+ * The mock connectors lead the list because they answer with `chains[0]`, so
+ * the fork has to be first for their writes to be prepared for the right chain.
+ * That ordering is also why {ConnectButton} never takes `connectors[0]`: index
+ * zero is a demo account, and connecting it on Sepolia would sign as somebody
+ * whose key is published in anvil's startup banner.
+ *
+ * This declares MetaMask; it does not prove one is installed. Discovery
+ * (EIP-6963, on by default) may also add MetaMask under `io.metamask` at
+ * runtime. {ConnectButton} asks each candidate for a provider rather than
+ * trusting either to exist.
+ */
+export const metaMask = injected({ target: "metaMask" });
+
 export const config = createConfig({
-  chains: [activeChain] as const,
-  connectors: IS_LOCAL
-    ? DEV_ACCOUNTS.map((a) =>
-        mock({ accounts: [a.address as `0x${string}`] }),
-      )
-    : [injected()],
+  chains: IS_DEV ? [anvilFork, hackathonSepolia] : [hackathonSepolia],
+  connectors: IS_DEV
+    ? [
+        ...DEV_ACCOUNTS.map((a) =>
+          mock({ accounts: [a.address as `0x${string}`] }),
+        ),
+        metaMask,
+      ]
+    : [metaMask],
   /**
    * Reads issued in the same tick go out as one `aggregate3`.
    *
@@ -40,9 +75,37 @@ export const config = createConfig({
    * trips without this, in series behind React Query, and one with it.
    */
   transports: {
-    [activeChain.id]: http(undefined, { batch: true }),
-  } as Record<number, ReturnType<typeof http>>,
+    [anvilFork.id]: http(undefined, { batch: true }),
+    [hackathonSepolia.id]: http(undefined, { batch: true }),
+  },
   batch: { multicall: true },
+
+  /**
+   * State that survives a reload, and is readable on the server.
+   *
+   * ── Why cookies and not localStorage ────────────────────────────────────
+   *
+   * `ssr: true` tells wagmi the first render happens somewhere with no wallet
+   * and no storage, so it must not assume a connection. That alone still gives
+   * a visible flash: the server renders "not connected", the client rehydrates
+   * from localStorage a moment later, and the header changes under the reader.
+   *
+   * A cookie is the one store both sides can read. {RootLayout} passes what the
+   * browser sent as `initialState`, so the FIRST html already knows which
+   * account and which chain — no flash, and no layout shift in the header.
+   *
+   * ── What it persists ────────────────────────────────────────────────────
+   *
+   * wagmi keeps `chainId` in the same state it keeps connections in, so
+   * choosing Sepolia survives a refresh for free. That was the alternative to
+   * a second, bespoke store for one number that wagmi already owns.
+   */
+  storage: createStorage({
+    storage: cookieStorage,
+    // Namespaced: two apps on localhost would otherwise share one key and read
+    // each other's connection back as their own.
+    key: "ens-slots.wagmi",
+  }),
   ssr: true,
 });
 

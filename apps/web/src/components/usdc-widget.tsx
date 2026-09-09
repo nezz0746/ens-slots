@@ -6,8 +6,7 @@ import { useAccount, useReadContract } from "wagmi";
 
 import { useTx } from "@/hooks/use-tx";
 import { mockUsdcAbi } from "@/lib/abis";
-import { addresses } from "@/lib/addresses";
-import { IS_LOCAL } from "@/lib/chains";
+import { useAddresses, useIsDeployed } from "@/hooks/use-addresses";
 import { cn } from "@/lib/utils";
 
 const HUNDRED = 100_000_000n; // 100 USDC, six decimals
@@ -21,12 +20,27 @@ const HUNDRED = 100_000_000n; // 100 USDC, six decimals
  * the token before finds out they have none of it before they start, not four
  * steps in.
  *
- * `mint` on the mock is open to anyone, verified against the deployed
- * bytecode. That is what makes this a faucet rather than an admin panel.
+ * ── The faucet is not local-only ────────────────────────────────────────────
+ *
+ * `mint` is open to anyone on this token — no owner, no minter role — and that
+ * is as true of the live Sepolia deployment as of the fork, because the fork
+ * inherits the same contract at the same address. Simulated from an unrelated
+ * account against live Sepolia to check, rather than assumed from the fork's
+ * behaviour.
+ *
+ * Gating it on the local chain was therefore a mistake with a real cost: on
+ * Sepolia a person needs MockUSDC to register a name and to hold a space, the
+ * token is not one any public faucet hands out, and the button that mints it
+ * was hidden on exactly the chain where it is hard to come by.
+ *
+ * What it IS gated on is having a deployment: on an unknown chain the address
+ * is zero and the button would send a transaction to nowhere.
  */
 export function UsdcWidget() {
   const { address, isConnected } = useAccount();
-  const { send, pending } = useTx();
+  const addresses = useAddresses();
+  const deployed = useIsDeployed();
+  const { send, pending, error } = useTx();
 
   const { data: balance, refetch } = useReadContract({
     address: addresses.mockUsdc,
@@ -45,15 +59,22 @@ export function UsdcWidget() {
     : "0";
 
   return (
-    <div className="flex items-center rounded-xl border border-line bg-surface">
+    <div className="relative flex items-center rounded-xl border border-line bg-surface">
+      {/* Under the control, because a faucet that quietly fails is
+          indistinguishable from one that is not wired up. */}
+      {error && (
+        <p className="absolute top-[calc(100%+0.375rem)] right-0 z-30 w-64 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] leading-snug text-hot shadow-lg">
+          {error}
+        </p>
+      )}
       <span className="px-2.5 py-1 text-[11px] tabular-nums text-ink-soft">
         {shown} <span className="text-ink-faint">USDC</span>
       </span>
-      {IS_LOCAL && (
+      {deployed && (
         <button
           type="button"
           disabled={!!pending}
-          title="Mint 100 test USDC"
+          title="Mint 100 test USDC — anyone can, on either chain"
           onClick={async () => {
             if (!address) return;
             await send("mint", {
