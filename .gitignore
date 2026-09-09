@@ -14,4 +14,8 @@ next-env.d.ts
 apps/contracts/out/
 apps/contracts/cache/
 apps/contracts/broadcast/
+
+# The local chain's deployment ledger, rewritten by every `pnpm seed`. Real
+# chains' ledgers ARE committed — they are the only record of what is live.
+apps/contracts/deployments/31337/
 *.tsbuildinfo

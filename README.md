@@ -38,8 +38,11 @@ cd apps/contracts
 SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com forge test
 ```
 
-25 tests against a Sepolia fork: a real `UserRegistry` deployed through ENS's
-real `VerifiableFactory`, real slots from the real `SlotFactory`. Without
+57 tests against a Sepolia fork, split the way the contracts are: what a
+namespace does, what the factory opens, what the resolver answers, and what
+survives an upgrade. A real `UserRegistry` deployed through ENS's real
+`VerifiableFactory`, real slots from the real `SlotFactory`, and the whole
+proxy stack stood up exactly as `pnpm protocol deploy` stands it up. Without
 `SEPOLIA_RPC_URL` they skip rather than fail.
 
 ---
@@ -47,12 +50,15 @@ real `VerifiableFactory`, real slots from the real `SlotFactory`. Without
 ## How it works
 
 ```
-SlotNamespace  ──registers──▶  UserRegistry (ENSv2)     one per parent name
-      │                              ▲
-      │                              │ resolver
-      ├──creates────▶ SlotFactory ───┴─▶ Slot            one per slotted label
-      │                                    │
-      └──read by────▶ SlotNamespaceResolver ┘            stateless adapter
+SlotNamespaceFactory ──beacon──▶ SlotNamespace          one proxy per parent name
+  (UUPS proxy)         │              │
+      │                │             registers
+      │                └──index──┐    ▼
+      │                          │  UserRegistry (ENSv2)
+      └──deploys the registry────┘    ▲
+                                      │ resolver
+SlotNamespaceResolver ────────────────┘                 one, for every namespace
+  (UUPS proxy)
 ```
 
 **The name never moves.** `SlotNamespace` registers each slotted label to
@@ -78,26 +84,112 @@ keyed by the slot's `tenureId` rather than by your address.
 Names never expire (`type(uint64).max`). The tax and liquidation already
 recycle an abandoned slot, so `ROLE_RENEW` is never granted to anything.
 
----
+### Upgradeable, deliberately
+
+Every contract that holds state is behind a proxy, because this is built on two
+protocols that both describe their interfaces as provisional — the ENS docs
+carry a standing "not yet final" warning on every page.
+
+| | pattern | upgrading it |
+|---|---|---|
+| `SlotNamespaceFactory` | UUPS | one proxy, one call |
+| `SlotNamespaceResolver` | UUPS | one proxy, one call |
+| `SlotNamespace` | **beacon** | one call, **every namespace at once** |
+
+The third is the one that matters and the one with no undo: `upgradeBeacon`
+reinterprets the storage of every namespace in the system in a single
+transaction, and nothing runs afterwards to notice a mistake. Three things
+guard it:
+
+- **`pnpm protocol layout`** diffs the compiled storage layout against a
+  committed snapshot. It is the only check that can catch a moved variable,
+  because a test writes fresh storage through new code and passes either way.
+- **A version gate.** `version()` is a constant compiled into each
+  implementation, and the upgrade script refuses anything that does not
+  strictly increase — which turns "shipped a stale branch" into a failed run.
+- **A live witness.** The upgrade reads a real namespace through the old code
+  and again through the new one, and reverts the run if anything differs.
+
+Say the obvious thing plainly: while one key holds `admin`, that key can change
+the code running under every curator's name. That is the right trade this week
+and the wrong one forever; `transferAdmin` hands it to a multisig.
+
+### One resolver, not one per namespace
+
+There used to be a resolver deployed beside each namespace, holding an
+immutable pointer to it. The shared one finds the namespace from the *name* —
+hash the whole thing and ask the factory, and on a miss hash it again from the
+second label.
+
+That is worth more than the deployment it saves. A resolver's address is written
+into an ENS registry entry at registration, so replacing a per-namespace
+resolver meant a `setResolver` for every slotted label. One shared resolver
+behind a proxy is upgraded in place, and the address in every registry entry
+stays correct forever.
+
+### Opening a namespace is one transaction
+
+It was four: deploy a subname registry, open the namespace, grant it two roles,
+point it at a resolver. `SlotNamespaceFactory.open` does all four, and can slot
+the first labels while it is there.
+
+The roles are why it works. They go in the registry's **own initializer**
+rather than a call afterwards, which is possible because the namespace's
+address is known before the registry exists — its proxy is created empty and
+initialized at the end of the same call.
+
+What no contract can do for you is `setSubregistry` on the `.eth` registry;
+that belongs to whoever owns the parent name. For a name being bought now it is
+free, because ENS derives the registry's address by CREATE2 and the registrar's
+own `register` takes it as an argument.
+
+Batching, once a namespace is open:
+
+```
+slotLabels([...])            several labels, one signature
+setTexts(node, keys, values) an occupant's whole payload
+setParentTexts(keys, values) the namespace's whole profile
+multicall([...])             mixed — labels plus a profile
+```
+
+`multicall` delegatecalls into the namespace, which preserves `msg.sender`, so
+`onlyOwner` still applies to every inner call and it confers nothing.
+
+Calls to *different* contracts — approving an ERC20 and then registering with
+it — can only be batched by the wallet. The app uses EIP-5792 where the wallet
+supports it and falls back to one signature at a time where it does not.
 
 ## What's in here
 
 ```
-apps/contracts/     Foundry — the contracts and the fork tests
+apps/contracts/     Foundry — the contracts, the fork tests, the deploy CLI
 apps/web/           Next.js — the app
 packages/sponsor/   the record standard: schemas, enrichment, parsing
-scripts/            the local stack: chain, seed, dev
+scripts/            the local stack: chain, seed, dev, protocol
 ENSV2.txt           working reference for ENSv2, incl. what the docs get wrong
 ```
 
 | Contract | |
 |---|---|
-| `SlotNamespace` | Curator, ENS custodian, record store. All state lives here. |
-| `SlotNamespaceResolver` | `IExtendedResolver` adapter. Holds nothing, so it can be replaced. |
-| `SlotNamespaceFactory` | Opens namespaces and records them. Holds no authority. |
+| `SlotNamespace` | One parent name's subnames. Beacon proxy; assembled from `namespace/`. |
+| `namespace/SlotNamespaceBase` | The state, and the only file that declares any. |
+| `namespace/SlotNamespaceCuration` | What the owner may do: open labels, close them. |
+| `namespace/SlotNamespaceRecords` | What occupants and the owner may write. |
+| `namespace/SlotNamespaceViews` | What anyone may read. |
+| `SlotNamespaceFactory` | The index, the beacon owner, and `open`. UUPS proxy. |
+| `SlotNamespaceResolver` | One `IExtendedResolver` for every namespace. UUPS proxy. |
+| `upgrades/` | `version()`, and what every UUPS singleton here shares. |
 | `interfaces/` | The ENSv2 and 0xSlots surfaces we call, hand-written and verified against the deployments. |
 
----
+Only `SlotNamespaceBase` declares storage. That is what makes splitting a
+beacon implementation across four files safe: Solidity lays out base storage in
+linearization order, so state spread across several bases would have its slots
+decided by the order they appear in `contract SlotNamespace is A, B, C` — and
+reordering that list, which looks cosmetic, would silently reinterpret the
+storage of every live namespace.
+
+New state is **appended above `__gap`**, decrementing the gap by what it takes.
+`pnpm protocol layout` is what actually enforces that.
 
 ## Does it resolve?
 
@@ -196,7 +288,7 @@ they are entering before they enter it.
 One key, one self-describing payload:
 
 ```
-org.0xslots.sponsor  →  { v, type, data, metadata }
+com.ethglobal.sponsor  →  { v, type, data, metadata }
 ```
 
 - **Raw JSON, not base64.** The field is a text record, not a URI, so the data-
@@ -270,24 +362,55 @@ final" warning, so it's all checked against deployed bytecode. Details in
 
 ## Deploying
 
+One CLI, one chain at a time, chosen by a flag rather than by a config file
+that can disagree with the RPC.
+
 ```bash
-cd apps/contracts
-PARENT_NODE=0x… forge script script/Deploy.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
+pnpm protocol status              # what is live on the local fork
+pnpm protocol status --sepolia
+pnpm protocol deploy --sepolia    # first deploy
+pnpm protocol upgrade --dry       # what an upgrade would change, sending nothing
+pnpm protocol upgrade
+pnpm protocol layout              # storage layout vs the committed snapshot
 ```
 
-Then, from the parent name's owner — the script has no business holding that
-key:
+`status` reads everything off the chain rather than off the ledger, and says so
+when the two disagree — which they do whenever an upgrade is sent by hand, from
+a multisig, or from a branch that was never merged.
+
+`upgrade` runs the layout check first, refuses any `version()` that does not
+strictly increase, and takes a fingerprint of a live namespace through the old
+code and again through the new one. It is safe to run when nothing has changed:
+everything reports `skip`.
+
+The ledger is `apps/contracts/deployments/<chainid>/<Name>.json`. The chain id
+comes from `block.chainid`, so the RPC decides which one is written — and the
+local fork runs at 31337 precisely so a local deploy can never overwrite the
+record of what is live on Sepolia.
+
+`--dry` is two things, not one: forge is told not to send, and the script is
+told it is not sending. Without the second, `record()` would rewrite the ledger
+with addresses it had merely predicted.
+
+Sepolia needs `PK` (the key holding `admin`) and `SEPOLIA_RPC_URL`. Set `ADMIN`
+to hand the upgrade keys to a multisig at deploy time; the script then leaves
+the final `setResolver` for that multisig to make, and says so.
+
+### After a deploy
+
+Two calls belong to the parent name's owner, and no factory can make them:
 
 ```
-ethRegistry.setSubregistry(labelhash("yourname"), userRegistry)
-ethRegistry.setResolver(labelhash("yourname"), resolver)   # for the parent's own records
-namespace.setResolver(resolver)
+ethRegistry.setSubregistry(labelhash("yourname"), <your registry>)
+ethRegistry.setResolver(labelhash("yourname"), <the shared resolver>)
 ```
+
+The first is what makes the subnames resolve. The second is for the parent
+name's own records. Buying a name through the app does both for free — the
+registrar takes them as arguments — so this is only for a name you already own.
 
 Moving from the fork to Sepolia proper is a chain id, not a rewrite: the
 addresses are identical either way.
-
----
 
 ## Branding
 
@@ -306,6 +429,9 @@ provisional. Don't put anything you care about behind it.
 
 Known gaps:
 
+- **`admin` is one key.** It can upgrade the beacon, which changes the code
+  running under every curator's name. `transferAdmin` moves it to a multisig
+  and that is the intended end state, not the current one.
 - **The unknown-type fallback has no test.** It works, and the seed used to
   carry a record of a made-up type to prove it, which was more confusing than
   it was worth. There is no TypeScript test runner in this repo yet, so for

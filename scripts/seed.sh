@@ -39,13 +39,31 @@ ENS_ETH_REGISTRY=0x1D78834d97c1D7b1A38c1deDBD1a287cFEd3971e
 MOCK_USDC=0xcBFD80F74375c54E545AF34788Ff465F96F66F05
 YEAR=31536000
 ALL_ROLES=0x1111111111111111111111111111111111111111111111111111111111111111
-ROLE_REGISTRAR_AND_UNREGISTER=4097   # (1 << 0) | (1 << 12)
 
 TAX_BPS=500
 MIN_DEPOSIT_SECONDS=604800
+# The run every sponsor is guaranteed, carried by the namespace's hook rather
+# than set per label. Without it a sponsor can be outbid minutes after paying
+# and the space they bought never runs.
+MIN_TENURE_HOOK=0xB1e68532Ba467b2310A931abcDD682E718426c9C
+MIN_TENURE_SECONDS=$(printf "0x%064x" 604800)
 ZERO=0x0000000000000000000000000000000000000000
 ZERO32=0x0000000000000000000000000000000000000000000000000000000000000000
-TERMS="($DEPLOYER,$ZERO,$ZERO,$ZERO,$ZERO32,$TAX_BPS,$MIN_DEPOSIT_SECONDS,false,false)"
+# One currency for the whole protocol: the same MockUSDC the .eth registrar
+# charges in. Slots priced in native ETH while registration was priced in a
+# token meant two mental models and two balances on one screen — and MockUSDC
+# is the one anybody can mint, so it is the one a demo can hand out.
+#
+# The SECOND field is the currency. Native is the zero address; anything else
+# is pulled with `transferFrom`, so every buy and top-up needs an allowance
+# first and must send no `msg.value` at all.
+#
+# Fields four and five are the hook and its data — the minimum tenure, applied
+# to every space opened in the namespace. A label passing hook zero inherits it.
+TERMS="($DEPLOYER,$MOCK_USDC,$ZERO,$MIN_TENURE_HOOK,$MIN_TENURE_SECONDS,$TAX_BPS,$MIN_DEPOSIT_SECONDS,false,false)"
+
+# MockUSDC is 6 decimals, not 18. Every price below is in whole dollars.
+USDC=1000000
 
 send() { cast send --private-key "$1" --rpc-url "$RPC" "${@:2}" >/dev/null; }
 call() { cast call --rpc-url "$RPC" "$@"; }
@@ -67,14 +85,21 @@ done
 ETH_NODE=$(cast keccak "$(cast concat-hex "$ZERO32" "$(cast keccak eth)")")
 namehash() { cast keccak "$(cast concat-hex "$ETH_NODE" "$(cast keccak "$1")")"; }
 
-echo "→ SlotNamespaceFactory"
-# Parsed from the human output rather than `--json`, which this foundry
-# nightly accepts and then ignores.
-NSF=$(forge create src/SlotNamespaceFactory.sol:SlotNamespaceFactory \
-  --rpc-url "$RPC" --private-key "$DEPLOYER_PK" --broadcast \
-  --constructor-args "$SLOT_FACTORY" \
-  | grep "Deployed to:" | awk '{print $3}')
-[ -n "$NSF" ] || { echo "factory deploy failed"; exit 1; }
+echo "→ the protocol"
+# Deployed by the same CLI that deploys to Sepolia, rather than a `forge create`
+# of its own. The seed used to build the factory by hand, which meant the local
+# chain and a real one were stood up by two different pieces of code and only
+# one of them was ever exercised before a deploy.
+rm -f "$ROOT/apps/contracts/deployments/31337/"*.json
+"$ROOT/scripts/protocol" deploy >/dev/null
+
+read_deployment() {          # $1 = contract name
+  python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['address'])" \
+    "$ROOT/apps/contracts/deployments/31337/$1.json"
+}
+NSF=$(read_deployment SlotNamespaceFactory)
+RESOLVER=$(read_deployment SlotNamespaceResolver)
+[ -n "$NSF" ] || { echo "deploy failed"; exit 1; }
 
 # ── Actually own the parent name ────────────────────────────────────────────
 #
@@ -121,58 +146,67 @@ register_parent() {          # $1 = label, $2 = the UserRegistry to point it at
   send "$DEPLOYER_PK" "$ENS_ETH_REGISTRAR" "$data"
 }
 
-open_namespace() {           # $1 = label, e.g. "community"
-  local label="$1" node registry ns res init data
+# ── Open a namespace, in one transaction ────────────────────────────────────
+#
+# This used to be five: deploy a UserRegistry, register the parent, open the
+# namespace, grant it two roles, point it at a resolver. `open` does all but the
+# parent registration now — including granting the namespace its roles, which it
+# can only do because the registry is deployed inside the same call, with the
+# grants in its own initializer.
+#
+# The registry address is still needed BEFORE the call, because the parent name
+# is registered with `subregistry` already set. ENS derives it by CREATE2 from
+# (verifiable factory, our factory, parent node), so it is knowable in advance —
+# simulated here with `--from $NSF`, which is ENS's own code answering rather
+# than a derivation of ours that could drift.
+open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
+  local label="$1" node registry init ns data specs
+  shift
   node=$(namehash "$label")
 
   init=$(cast calldata "initialize((address,uint256)[])" "[($DEPLOYER,$ALL_ROLES)]")
-  registry=$(call "$ENS_VF" "deployProxy(address,uint256,bytes)(address)" "$ENS_UR_IMPL" "$node" "$init" --from "$DEPLOYER")
-  send "$DEPLOYER_PK" "$ENS_VF" "deployProxy(address,uint256,bytes)" "$ENS_UR_IMPL" "$node" "$init"
+  registry=$(call "$ENS_VF" "deployProxy(address,uint256,bytes)(address)" \
+    "$ENS_UR_IMPL" "$node" "$init" --from "$NSF")
 
   register_parent "$label" "$registry"
+
+  # `(label, kind, hook, hookData, permanent)` per label, as a tuple array.
+  specs="[$(IFS=,; echo "$*")]"
 
   # Encoded first, then sent as raw calldata, and it has to be this way round:
   # `cast` ENS-RESOLVES any argument ending in `.eth`, even for a `string`
   # parameter. On a Sepolia fork "based.eth" resolves and "community.eth" does
-  # not, so passing the names directly stored an address for one of them and
-  # the name for the other. `cast calldata` does no such thing.
+  # not, so passing the names directly stored an address for one of them and the
+  # name for the other. `cast calldata` does no such thing.
   data=$(cast calldata \
-    "open(address,bytes32,string,(address,address,address,address,bytes32,uint256,uint256,bool,bool),address)" \
-    "$registry" "$node" "$label.eth" "$TERMS" "$DEPLOYER")
+    "open((address,bytes32,string,(address,address,address,address,bytes32,uint256,uint256,bool,bool),address,(string,uint8,address,bytes32,bool)[]))" \
+    "($ZERO,$node,$label.eth,$TERMS,$DEPLOYER,$specs)")
   send "$DEPLOYER_PK" "$NSF" "$data"
 
-  # Read back rather than predicted: the factory records both.
   ns=$(call "$NSF" "namespaceOf(bytes32)(address)" "$node")
-  res=$(call "$NSF" "resolverOf(bytes32)(address)" "$node")
 
-  send "$DEPLOYER_PK" "$registry" "grantRootRoles(uint256,address)" "$ROLE_REGISTRAR_AND_UNREGISTER" "$ns"
-  send "$DEPLOYER_PK" "$ns" "setResolver(address)" "$res"
-
-  # ── and point the PARENT name at the same resolver ──────────────────────
+  # ── and point the PARENT name at the shared resolver ──────────────────────
   #
-  # `namespace.setResolver` above is for the names this contract REGISTERS,
-  # which are its subnames. The parent is not one of them — it lives in the
-  # `.eth` registry and was registered by the deployer, so its resolver is set
-  # there, by its owner, once.
+  # The namespace's own subnames were pointed there by `open`. The parent is not
+  # one of them — it lives in the `.eth` registry and was registered by the
+  # deployer, so its resolver is set there, by its owner, once.
   #
   # Without this the namespace's own avatar and description store perfectly and
-  # resolve to nothing: `getEnsText({ name: "nezzar.eth", key: "avatar" })`
-  # walks down to a `.eth` label with no resolver and stops. The subnames are
-  # unaffected either way — resolution takes the deepest resolver it finds, and
-  # each of them carries its own.
-  send "$DEPLOYER_PK" "$ENS_ETH_REGISTRY" "setResolver(uint256,address)" "$(cast keccak "$label")" "$res"
+  # resolve to nothing: `getEnsText({ name: "nezzar.eth", key: "avatar" })` walks
+  # down to a `.eth` label with no resolver and stops.
+  send "$DEPLOYER_PK" "$ENS_ETH_REGISTRY" "setResolver(uint256,address)" "$(cast keccak "$label")" "$RESOLVER"
 
   echo "$ns"
 }
 
-# LabelKind: 0 = COMMON, 1 = SPONSORING.
-slot_label() {               # $1 = namespace, $2 = label, $3 = kind, $4 = permanent
-  send "$DEPLOYER_PK" "$1" "slotLabel(string,uint8,address,bytes32,bool)" \
-    "$2" "$3" "$ZERO" "$ZERO32" "$4"
+# A `LabelSpec` tuple. Every space is SPONSORING (kind 1), never permanent, and
+# passes hook zero so it inherits the namespace's minimum tenure.
+spec() {                     # $1 = label
+  echo "($1,1,$ZERO,$ZERO32,false)"
 }
 
 node_of() {                  # $1 = namespace, $2 = label
-  cast keccak "$(cast concat-hex "$(call "$1" "PARENT_NODE()(bytes32)")" "$(cast keccak "$2")")"
+  cast keccak "$(cast concat-hex "$(call "$1" "parentNode()(bytes32)")" "$(cast keccak "$2")")"
 }
 
 # Written by the OCCUPANT, which is the only party that can. Pre-baked rather
@@ -182,7 +216,7 @@ node_of() {                  # $1 = namespace, $2 = label
 set_record() {               # $1 = namespace, $2 = label, $3 = pk, $4 = json
   local data
   data=$(cast calldata "setText(bytes32,string,string)" \
-    "$(node_of "$1" "$2")" "org.0xslots.sponsor" "$4")
+    "$(node_of "$1" "$2")" "com.ethglobal.sponsor" "$4")
   send "$3" "$1" "$data"
 }
 
@@ -198,138 +232,105 @@ set_parent_record() {        # $1 = namespace, $2 = key, $3 = value
 
 take() {                     # $1 = namespace, $2 = label, $3 = pk, $4 = who, $5 = price
   local node slot dep owed
-  node=$(cast keccak "$(cast concat-hex "$(call "$1" "PARENT_NODE()(bytes32)")" "$(cast keccak "$2")")")
+  node=$(cast keccak "$(cast concat-hex "$(call "$1" "parentNode()(bytes32)")" "$(cast keccak "$2")")")
   slot=$(call "$1" "slotOfNode(bytes32)(address)" "$node")
   # Twice the floor: funding exactly the minimum sits on the liquidation
   # boundary and reads as "running low" the moment a block passes.
   dep=$(call "$slot" "minDepositForBuy(uint256)(uint256)" "$5" | cut -d' ' -f1)
   dep=$((dep * 2))
   owed=$(call "$slot" "quoteBuy(address,uint256)(uint256)" "$4" "$dep" | cut -d' ' -f1)
+
+  # An ERC-20 slot pulls what it is owed, so the buyer has to hold it and have
+  # approved it. `mint` is open on the mock, which is the whole point of using
+  # it — the dev accounts fund themselves.
+  send "$3" "$MOCK_USDC" "mint(address,uint256)" "$4" "$owed"
+  send "$3" "$MOCK_USDC" "approve(address,uint256)" "$slot" "$owed"
+
+  # No `--value`: the slot rejects a non-zero `msg.value` on the ERC-20 path.
   send "$3" "$slot" "buy(address,uint256,uint256,uint256)" "$4" "$5" "$dep" \
-    115792089237316195423570985008687907853269984665640564039457584007913129639935 --value "$owed"
+    115792089237316195423570985008687907853269984665640564039457584007913129639935
 }
 
-# ── who these namespaces are ────────────────────────────────────────────────
+# ── the one namespace ───────────────────────────────────────────────────────
 #
-# Three real names, chosen because they are three different reasons to open a
-# namespace, and each one draws a different card:
+# `ethglobal.eth`, with three sponsoring spaces under it. One name rather than
+# three, because the point being demonstrated is what a namespace IS — a parent
+# with spaces on the market — and three of them said the same thing three times
+# while taking three times as long to seed.
 #
-#   nezzar.eth     a person. Subnames are identity first, a sponsoring space
-#                  second. Its avatar and header are the ones nezzar.eth
-#                  actually has on mainnet today.
-#   clanker.eth    a product. Every subname under it is a sponsoring space,
-#                  because that is what the product is for.
-#   dailygwei.eth  a publication. Sponsorship is the business model, so the
-#                  slotted labels ARE the ad inventory.
+# `sponsor-1..3` are deliberately plain. Names like `pool` or `press` invited
+# the reading that a space is typed, and it is not: any space can show any of
+# the payload kinds, which is exactly what these three do.
+
+echo "→ ethglobal.eth"
+ETHGLOBAL=$(open_namespace ethglobal "$(spec sponsor-1)" "$(spec sponsor-2)" "$(spec sponsor-3)")
+
+# ── what the namespace says about itself ────────────────────────────────────
 #
-# The `.eth` labels are registered here on the fork; the profiles are the real
-# ones, read from each project's own site and from mainnet ENS.
-
-echo "→ nezzar.eth"
-NEZZAR=$(open_namespace nezzar)
-slot_label "$NEZZAR" gm    1 false
-slot_label "$NEZZAR" links 0 false
-slot_label "$NEZZAR" hire  1 false
-
-echo "→ clanker.eth"
-CLANKER=$(open_namespace clanker)
-slot_label "$CLANKER" pool  1 true
-slot_label "$CLANKER" token 1 false
-slot_label "$CLANKER" app   1 false
-
-echo "→ dailygwei.eth"
-DAILYGWEI=$(open_namespace dailygwei)
-slot_label "$DAILYGWEI" sponsor 1 true
-slot_label "$DAILYGWEI" press   1 false
-slot_label "$DAILYGWEI" guest   0 false
-
-# ── what each namespace says about itself ───────────────────────────────────
+# Read off ethglobal.com at seed time rather than pasted in here.
 #
-# Ordinary ENS text records on the parent name, written by its owner. `header`
-# rather than `banner` because `header` is the key ENS's own manager app writes
-# for exactly this, and the whole argument here is that these are records any
-# ENS client already knows how to read.
+# `ethglobal.eth` resolves to an address on mainnet and carries no text records
+# at all — checked, not assumed — so there is no ENS profile to copy. What the
+# site serves in its own meta tags is the next most honest source, and it is the
+# same one `packages/sponsor` reads when somebody publishes a link.
 #
-# nezzar.eth's two images are its REAL mainnet records, pinned where they
-# actually are. The other two profiles are each project's own assets, taken
-# from the meta tags their sites serve.
-echo "→ profiles"
+# Fetched with a timeout and a fallback: a seed that cannot run without the
+# network would fail for reasons that have nothing to do with the chain, and
+# this is scaffolding, not a test of ethglobal.com's uptime.
+echo "→ profile"
 
-set_parent_record "$NEZZAR" avatar      'https://rainbow.mypinata.cloud/ipfs/QmXgMeifcb1sswRCp8BKZKvmfd4WtEag9KLoQ4nEsUFzQ5'
-set_parent_record "$NEZZAR" header      'https://rainbow.mypinata.cloud/ipfs/QmTLar2ZqZ7hhZDzqBdcBF9AdqZQR4NdohjJn9yiDqHAeX'
-set_parent_record "$NEZZAR" description 'Fullstack developer and product builder. Opening a few subnames to whoever wants them.'
-set_parent_record "$NEZZAR" url         'https://nezzar.dev'
+meta() {                     # $1 = property, $2 = fallback
+  local html value
+  html=$(curl -sL --max-time 10 -A "Mozilla/5.0" https://ethglobal.com 2>/dev/null || true)
+  value=$(printf '%s' "$html" \
+    | grep -oiE "<meta[^>]+(property|name)=\"$1\"[^>]*>" \
+    | grep -oiE 'content="[^"]*"' \
+    | head -1 | sed -E 's/^content="//; s/"$//')
+  printf '%s' "${value:-$2}"
+}
 
-set_parent_record "$CLANKER" avatar      'https://www.clanker.world/logo_circle.png'
-set_parent_record "$CLANKER" header      'https://www.clanker.world/api/og/home'
-set_parent_record "$CLANKER" description 'Launch ERC-20 tokens on Base, Arbitrum, BNB Chain and more — no code required. Instant liquidity, built-in fee rewards, and presales.'
-set_parent_record "$CLANKER" url         'https://www.clanker.world'
+ETHGLOBAL_TITLE=$(meta "og:title" "ETHGlobal")
+ETHGLOBAL_DESC=$(meta "og:description" "Bringing developers onchain to build the future of the internet.")
+ETHGLOBAL_IMAGE=$(meta "og:image" "https://ethglobal.com/og.png")
 
-set_parent_record "$DAILYGWEI" avatar      'https://substackcdn.com/image/fetch/$s_!nXWu!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fbucketeer-e05bbc84-baa3-437e-9518-adb32be77984.s3.amazonaws.com%2Fpublic%2Fimages%2F66edc435-3321-4611-9d5f-732e1ad2d71d%2Fapple-touch-icon-180x180.png'
-set_parent_record "$DAILYGWEI" header      'https://substackcdn.com/image/fetch/$s_!fPzj!,f_auto,q_auto:best,fl_progressive:steep/https%3A%2F%2Fthedailygwei.substack.com%2Ftwitter%2Fsubscribe-card.jpg%3Fv%3D162594653%26version%3D9'
-set_parent_record "$DAILYGWEI" description 'Daily commentary on the Ethereum ecosystem, by Anthony Sassano.'
-set_parent_record "$DAILYGWEI" url         'https://thedailygwei.substack.com'
+echo "     $ETHGLOBAL_TITLE — $ETHGLOBAL_DESC"
 
+set_parent_record "$ETHGLOBAL" avatar      "https://ethglobal.com/favicon.ico"
+set_parent_record "$ETHGLOBAL" header      "$ETHGLOBAL_IMAGE"
+set_parent_record "$ETHGLOBAL" description "$ETHGLOBAL_DESC"
+set_parent_record "$ETHGLOBAL" url         "https://ethglobal.com"
+
+# ── occupancy ───────────────────────────────────────────────────────────────
+#
+# Two of the three held, one left vacant. An empty space is the state a visitor
+# is most likely to arrive on and the only one from which the buy flow can be
+# demonstrated, so the seed has to leave one.
 echo "→ occupancy"
-take "$NEZZAR"    gm      "$BOB_PK"   "$BOB"   400000000000000000
-take "$NEZZAR"    links   "$ALICE_PK" "$ALICE" 250000000000000000
-take "$CLANKER"   pool    "$BOB_PK"   "$BOB"   2000000000000000000
-take "$CLANKER"   token   "$ALICE_PK" "$ALICE" 750000000000000000
-take "$CLANKER"   app     "$BOB_PK"   "$BOB"   500000000000000000
-take "$DAILYGWEI" sponsor "$ALICE_PK" "$ALICE" 900000000000000000
-take "$DAILYGWEI" press   "$ALICE_PK" "$ALICE" 300000000000000000
-take "$DAILYGWEI" guest   "$BOB_PK"   "$BOB"   120000000000000000
+take "$ETHGLOBAL" sponsor-1 "$ALICE_PK" "$ALICE" $((900 * USDC))
+take "$ETHGLOBAL" sponsor-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
 
-# ── what the sponsoring spaces are showing ──────────────────────────────────
+# ── what the spaces are showing ─────────────────────────────────────────────
 #
-# Real pointers, and the metadata is what `packages/sponsor` actually returned
-# for them — generated by running the enrichment and pasting the result, not
-# written by hand. Pre-baked rather than enriched here on purpose: enrichment is
-# a publish-time network call against an index that rate limits anonymous
-# callers at 30 a minute, and a seed that needed it up would fail for reasons
-# that have nothing to do with the chain.
+# Two different payload kinds on two identical spaces, which is the argument:
+# nothing about a space decides what it shows, only its occupant does.
 #
-# `hire` is deliberately left vacant and `guest` deliberately has no record: an
-# empty sponsoring space and a plain identity name are both states the app has
-# to draw, and the first is the one a visitor is most likely to arrive on.
+# The metadata is what `packages/sponsor` actually returned for these, pasted
+# rather than enriched here — enrichment is a publish-time network call against
+# an index that rate limits anonymous callers at 30 a minute.
 echo "→ records"
 
-# an ordinary page, on a personal namespace
-set_record "$NEZZAR" gm "$BOB_PK" '{"v":1,"type":"url","data":{"url":"https://l2beat.com"},"metadata":{"name":"L2BEAT","image":"https://l2beat.com/static/apple-icon.7b05d4c1.png","tagline":"Track the Ethereum ecosystem in one view: L2s and Ethereum metrics, interoperability flows, privacy protocols and ZK provers, ongoing anomal","host":"l2beat.com"}}'
-
-# a live pool, whose figures the card fetches rather than stores
-set_record "$CLANKER" pool "$BOB_PK" '{"v":1,"type":"pool","data":{"chainId":8453,"address":"0xc1a6fbedae68e1472dbb91fe29b51f7a0bd44f97"},"metadata":{"name":"CLANKER / WETH 1%","image":"https://coin-images.coingecko.com/coins/images/51440/large/CLANKER.png?1731232869","tagline":"Uniswap V3 (Base) · Base","pair":"CLANKER / WETH 1%","dex":"Uniswap V3 (Base)","chainLabel":"Base"}}'
+# an ordinary page
+set_record "$ETHGLOBAL" sponsor-1 "$ALICE_PK" '{"v":1,"type":"url","data":{"url":"https://splits.org"},"metadata":{"name":"Splits | Process revenue, move money, run operations globally","image":"https://splits.org/logo_compressed.svg","tagline":"Process revenue, move money, and run operations instantly, anywhere in the world. Treasury and personal accounts, agent-ready tools, and ope","host":"splits.org"}}'
 
 # a token
-set_record "$CLANKER" token "$ALICE_PK" '{"v":1,"type":"token","data":{"chainId":8453,"address":"0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b"},"metadata":{"name":"BankrCoin","image":"https://coin-images.coingecko.com/coins/images/52626/large/bankr-static.png?1736405365","tagline":"BNKR on Base","symbol":"BNKR","chainLabel":"Base"}}'
+set_record "$ETHGLOBAL" sponsor-2 "$BOB_PK" '{"v":1,"type":"token","data":{"chainId":8453,"address":"0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b"},"metadata":{"name":"BankrCoin","image":"https://coin-images.coingecko.com/coins/images/52626/large/bankr-static.png?1736405365","tagline":"BNKR on Base","symbol":"BNKR","chainLabel":"Base"}}'
 
-# a mini app that publishes its own manifest
-set_record "$CLANKER" app "$BOB_PK" '{"v":1,"type":"miniapp","data":{"url":"https://app.astroblock.xyz"},"metadata":{"name":"Astroblock","image":"https://app.astroblock.xyz/icon.png","tagline":"Astroblock is an onchain galaxy. Explore the universe, leave your mark, and interact with others onchain. Get ahead and fuel your journey wi","host":"app.astroblock.xyz","verified":true}}'
-
-# an ordinary page — a publication's sponsor slot, doing the obvious thing
-set_record "$DAILYGWEI" sponsor "$ALICE_PK" '{"v":1,"type":"url","data":{"url":"https://splits.org"},"metadata":{"name":"Splits | Process revenue, move money, run operations globally","image":"https://splits.org/logo_compressed.svg","tagline":"Process revenue, move money, and run operations instantly, anywhere in the world. Treasury and personal accounts, agent-ready tools, and ope","host":"splits.org"}}'
-
-# a post
-set_record "$DAILYGWEI" press "$ALICE_PK" '{"v":1,"type":"post","data":{"url":"https://x.com/cobie/status/2090725931853758650"},"metadata":{"name":"Cobie (@cobie) on X","image":"https://pbs.twimg.com/profile_images/1955773696565719040/zVpm_8at_400x400.jpg","tagline":"Nobody move","network":"X","excerpt":"Nobody move"}}'
-
-python3 - "$NSF" "$ENS_ETH_REGISTRY" <<'PY'
-import json, sys
-json.dump({
-    "chainId": 31337,
-    "namespaceFactory": sys.argv[1],
-    "slotFactory": "0x14df7d78ef556A80F0AD3ede3F10F1e24f92E1cE",
-    "ensVerifiableFactory": "0x894bc9cC8ff1ad96B8a288C86A8C71D662C07780",
-    "ensUserRegistryImpl": "0x47B442d0CF617c41CAbAFf5f02f44DD1e5f72546",
-    "ensEthRegistry": sys.argv[2],
-    "ensEthRegistrar": "0x7d1B7f586a62Ac3F54b9A396849757814283270b",
-    "ensUniversalResolver": "0xd26f2040D083Af1cD2962ba303F4BEa0c4faf142",
-    "mockUsdc": "0xcBFD80F74375c54E545AF34788Ff465F96F66F05",
-    "minimumTenureHook": "0xB1e68532Ba467b2310A931abcDD682E718426c9C",
-}, open("../web/src/lib/deployment.json", "w"), indent=2)
-PY
+# The app's address book, regenerated from the ledgers this deploy just wrote
+# and the constants in `Addresses.sol`. Every chain with a ledger gets an entry,
+# so a Sepolia deploy shows up in the app without touching this script.
+"$ROOT/scripts/app-deployments.py"
 
 echo
 echo "  namespace factory  $NSF"
-echo "  nezzar.eth         $NEZZAR"
-echo "  clanker.eth        $CLANKER"
-echo "  dailygwei.eth      $DAILYGWEI"
+echo "  resolver           $RESOLVER"
+echo "  ethglobal.eth      $ETHGLOBAL"

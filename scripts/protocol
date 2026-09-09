@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+#
+# The deployment CLI. One chain at a time, chosen by a flag, never by a config
+# file that can disagree with the RPC.
+#
+#   pnpm protocol status                  what is live on the local fork
+#   pnpm protocol status --sepolia        what is live on Sepolia
+#   pnpm protocol deploy                  first deploy
+#   pnpm protocol upgrade --dry           what an upgrade would change
+#   pnpm protocol upgrade                 send it
+#   pnpm protocol layout                  storage layout vs the snapshot
+#   pnpm protocol layout --accept         adopt the current layout
+#
+# ── Why the layout check runs before every upgrade ──────────────────────────
+#
+# `SlotNamespace` is a beacon implementation. One `upgradeBeacon` reinterprets
+# the storage of every namespace at once, and a variable that moved cannot be
+# put back. The check is cheap, offline, and the only thing standing between a
+# reordered struct field and every live namespace reading the wrong slot — so it
+# is not optional and there is no flag to skip it.
+set -euo pipefail
+
+export FOUNDRY_DISABLE_NIGHTLY_WARNING=1
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONTRACTS="$ROOT/apps/contracts"
+
+# `.env`, if there is one. Everything a real deploy needs lives there — the
+# Sepolia endpoint and the admin key — and without this the script read only
+# what happened to be exported, so following `.env.example` to the letter still
+# failed with "SEPOLIA_RPC_URL is not set". `set -a` exports what it defines,
+# which is what `forge` and the expansions below both read.
+if [ -f "$ROOT/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$ROOT/.env"
+  set +a
+fi
+
+CMD="${1:-help}"
+shift || true
+
+RPC="http://127.0.0.1:8545"
+NETWORK="local"
+CHAIN_ID="31337"
+BROADCAST="--broadcast"
+DRY=""
+ACCEPT=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --sepolia)
+      NETWORK="sepolia"
+      CHAIN_ID="11155111"
+      RPC="${SEPOLIA_RPC_URL:?SEPOLIA_RPC_URL is not set}"
+      ;;
+    --dry)
+      # Two halves of the same thing: forge is told not to send, and the script
+      # is told it is not sending. Only the first is a flag forge understands —
+      # without the second, `record()` would rewrite the ledger with addresses
+      # that were merely predicted.
+      DRY="1"
+      BROADCAST=""
+      ;;
+    --accept) ACCEPT="accept" ;;
+    *) echo "unknown flag: $arg" >&2; exit 1 ;;
+  esac
+done
+
+export DRY_RUN="${DRY:+true}"
+
+# A private key is needed only to send. `status` and `layout` read, and a `--dry`
+# upgrade simulates — none of them should demand one.
+key_args() {
+  if [ "$NETWORK" = "local" ]; then
+    echo "--private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+  else
+    # `PRIVATE_KEY` is the name `.env.example` documents; `PK` stays as an
+    # alias so an exported shell variable keeps working.
+    echo "--private-key ${PRIVATE_KEY:-${PK:?PRIVATE_KEY is not set — the key that holds admin on Sepolia}}"
+  fi
+}
+
+# Regenerate the app's address book. Called after anything that writes a
+# ledger, so the app and the contracts can never disagree about where a
+# deployment is — they did, and the app spent a session talking to a factory
+# the CLI had already replaced.
+sync_app() {
+  [ -n "$DRY" ] && return 0
+  "$ROOT/scripts/app-deployments.py" || true
+}
+
+run_script() {                # $1 = contract name in script/protocol
+  cd "$CONTRACTS"
+  # `vm.writeFile` will not create a directory, and the ledger for a chain that
+  # has never been deployed to does not have one.
+  mkdir -p "deployments/$CHAIN_ID"
+  # shellcheck disable=SC2046
+  forge script "script/protocol/$1.s.sol:$1" \
+    --rpc-url "$RPC" $BROADCAST $(key_args) -vv
+}
+
+case "$CMD" in
+  layout)
+    cd "$CONTRACTS"
+    forge build --skip test >/dev/null
+    ./script/layout.py "${ACCEPT:-check}"
+    ;;
+
+  status)
+    cd "$CONTRACTS"
+    forge script script/protocol/Status.s.sol:Status --rpc-url "$RPC" -vv
+    ;;
+
+  deploy)
+    cd "$CONTRACTS"
+    forge build --skip test >/dev/null
+    # Adopted rather than checked. There is nothing live to break yet, and a
+    # first deploy on a chain with no snapshot would otherwise be blocked by a
+    # check that has nothing to compare against.
+    ./script/layout.py accept
+    run_script Deploy
+    sync_app
+    ;;
+
+  upgrade)
+    cd "$CONTRACTS"
+    forge build --skip test >/dev/null
+    ./script/layout.py check
+    run_script Upgrade
+    sync_app
+    ;;
+
+  help|--help|-h)
+    sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+
+  *)
+    echo "unknown command: $CMD" >&2
+    echo "try: pnpm protocol help" >&2
+    exit 1
+    ;;
+esac
