@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { NameDetails } from "@/components/name-details";
 import { NamespaceSummary } from "@/components/namespace-summary";
+import { RootProfileEditor } from "@/components/root-profile-editor";
 import { SlotLabelForm } from "@/components/slot-label-form";
 import { SlotPanel } from "@/components/slot-panel";
 import { useNamespace } from "@/hooks/use-namespaces";
@@ -71,6 +72,8 @@ export default function NamespacePage({
   }
 
   const current = namespace.subnames.find((s) => s.node === selected);
+  const isOwner =
+    !!me && namespace.owner.toLowerCase() === me.toLowerCase();
 
   return (
     <div className="space-y-6">
@@ -82,9 +85,18 @@ export default function NamespacePage({
           <ChevronLeft className="size-3.5" />
           All namespaces
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {namespace.parentName}
-        </h1>
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {namespace.parentName}
+          </h1>
+          {/*
+           * Only the owner, because only the owner can. `setParentTexts` is
+           * `onlyOwner`, so showing this to anybody else would offer a dialog
+           * whose Save can only revert. Disconnected has no `me` and so is not
+           * the owner either, which is the right answer for the same reason.
+           */}
+          {isOwner && <RootProfileEditor address={namespace.address} />}
+        </div>
         <p className="mt-1 text-xs text-ink-faint">
           {namespace.subnames.length} spaces · {namespace.occupied} held ·
           opened by{" "}
