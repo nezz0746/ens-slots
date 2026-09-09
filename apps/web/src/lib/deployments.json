@@ -17,8 +17,8 @@
     },
     "31337": {
       "chainId": 31337,
-      "namespaceFactory": "0x513546D3B1a45C971C9B59a783E7C8470f36af55",
-      "namespaceResolver": "0x4BE5b9A89fca31eEE70D2Cb8a443910687406f78"
+      "namespaceFactory": "0xCdDB057F68563A97A76c798DaaFCeDe08eA977A3",
+      "namespaceResolver": "0x4d216Ef5eDB0A9E1f8db189FcF3506C7a9024177"
     }
   }
 }
