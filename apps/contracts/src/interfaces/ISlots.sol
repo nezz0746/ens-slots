@@ -7,9 +7,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * @title ISlots
  * @notice The slice of the 0xSlots protocol this project calls.
  *
- * @dev Hand-written for the same reason as {IENSv2}: this repository consumes
- *      a deployed protocol, not its source tree. `test/ForkSepolia.t.sol`
- *      exercises every signature here against the live Sepolia deployment.
+ * @dev Hand-written as {IENSv2} is: this repo consumes a deployed protocol, not
+ *      its source. `test/ForkSepolia.t.sol` exercises every signature live.
  */
 
 /// @notice The eight values a slot is born with. Field order is load-bearing.
@@ -33,13 +32,9 @@ interface ISlotFactory {
 /**
  * @notice One continuously taxed position under common ownership.
  *
- * @dev {tenureId} is the important one here and it is not decoration. The
- *      protocol increments it on every buy and already uses it to scope
- *      operator approvals, so that an approval "dies silently when somebody
- *      else is seated". This project reuses it as the generation for a
- *      subname's records — records belong to a TENANCY, not to a person, so
- *      an occupant who leaves and later returns does not find their old
- *      records waiting for them.
+ * @dev {tenureId} increments on every buy. This project reuses it as the
+ *      generation for a subname's records, so an occupant who leaves and later
+ *      returns does not find their old records waiting.
  */
 interface ISlot {
     function occupant() external view returns (address);

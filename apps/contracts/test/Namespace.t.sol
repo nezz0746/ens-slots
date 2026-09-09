@@ -1,108 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test} from "forge-std/Test.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
-import {SepoliaAddresses} from "../src/Addresses.sol";
-import {SlotNamespace} from "../src/SlotNamespace.sol";
-import {SlotNamespaceResolver} from "../src/SlotNamespaceResolver.sol";
-import {
-    IPermissionedRegistry,
-    IRegistry,
-    IUserRegistry,
-    IVerifiableFactory,
-    RegistryRoles
-} from "../src/interfaces/IENSv2.sol";
-import {ISlot, ISlotFactory, SlotInit} from "../src/interfaces/ISlots.sol";
-import {SlotNamespaceFactory} from "../src/SlotNamespaceFactory.sol";
+import {SlotNamespaceBase} from "../src/namespace/SlotNamespaceBase.sol";
+import {IPermissionedRegistry} from "../src/interfaces/IENSv2.sol";
+import {ISlot} from "../src/interfaces/ISlots.sol";
+import {ForkBase} from "./ForkBase.sol";
 
 /**
- * @notice The whole thing, against the real contracts on Sepolia.
+ * @notice What a namespace does: open labels, hand them over, hold records.
  *
- * @dev Every external signature this project declares by hand — the ENSv2
- *      registry, the verifiable factory, the 0xSlots factory and slot — is
- *      exercised here against a live deployment. That is the point of running
- *      on a fork rather than against mocks: a mock would agree with whatever
- *      interface it was written from, including a wrong one, and the ENS docs
- *      say these interfaces are not final. Here a drifted signature shows up
- *      as a failed call.
- *
- *      A real UserRegistry is deployed through the real VerifiableFactory in
- *      `setUp`, which is also how it would be done in production. The parent
- *      name is NOT wired up: pointing a `.eth` name at this registry requires
- *      owning one, and none of the behaviour under test depends on it. What
- *      the hierarchy adds is resolution through the Universal Resolver, which
- *      is a separate concern from whether the namespace works.
- *
- *      Run with:  forge test --fork-url $SEPOLIA_RPC_URL
+ * @dev The behavioural suite, unchanged in substance by the move to proxies —
+ *      which is the point. Every assertion here passed against the old
+ *      constructor-built contract and passes against a beacon proxy opened by
+ *      the factory, because none of it was ever about how the thing was
+ *      deployed.
  */
-contract ForkSepoliaTest is Test {
-    IPermissionedRegistry registry;
-    SlotNamespace namespace;
-    SlotNamespaceResolver resolver;
-
-    address owner = makeAddr("owner");
-    address alice = makeAddr("alice");
-    address bob = makeAddr("bob");
-    address recipient = makeAddr("recipient");
-
-    /// @dev The parent this namespace pretends to sit under.
-    bytes32 constant PARENT_NODE =
-        keccak256(abi.encodePacked(keccak256(abi.encodePacked(bytes32(0), keccak256("eth"))), keccak256("slotsdemo")));
-
-    uint256 constant TAX_BPS = 500; // 5% per 30 days
-    uint64 constant MIN_DEPOSIT_SECONDS = 7 days;
-
-    function setUp() public {
-        // Skips cleanly rather than failing when no endpoint is configured, so
-        // `forge test` is still useful without one.
-        try vm.envString("SEPOLIA_RPC_URL") returns (string memory url) {
-            vm.createSelectFork(url);
-        } catch {
-            vm.skip(true);
-        }
-
-        // A real UserRegistry, deployed the way a name owner would deploy one.
-        IUserRegistry.Grant[] memory grants = new IUserRegistry.Grant[](1);
-        grants[0] = IUserRegistry.Grant({account: address(this), roleBitmap: RegistryRoles.ALL_ROLES});
-        bytes memory init = abi.encodeCall(IUserRegistry.initialize, (grants));
-        address proxy = IVerifiableFactory(SepoliaAddresses.ENS_VERIFIABLE_FACTORY)
-            .deployProxy(SepoliaAddresses.ENS_USER_REGISTRY_IMPL, uint256(PARENT_NODE), init);
-        registry = IPermissionedRegistry(proxy);
-
-        namespace = new SlotNamespace(
-            registry,
-            ISlotFactory(SepoliaAddresses.SLOT_FACTORY),
-            PARENT_NODE,
-            "slotsdemo.eth",
-            SlotInit({
-                recipient: recipient,
-                currency: IERC20(address(0)), // native ETH
-                manager: address(0),
-                hook: address(0),
-                hookData: bytes32(0),
-                taxBps: TAX_BPS,
-                minDepositSeconds: MIN_DEPOSIT_SECONDS,
-                mutableTax: false,
-                mutableHook: false
-            }),
-            owner
-        );
-
-        resolver = new SlotNamespaceResolver(namespace);
-
-        // What the namespace needs, and nothing more. No ROLE_RENEW: names
-        // here never expire, so that authority is never granted at all.
-        registry.grantRootRoles(RegistryRoles.ROLE_REGISTRAR | RegistryRoles.ROLE_UNREGISTER, address(namespace));
-
-        vm.prank(owner);
-        namespace.setResolver(address(resolver));
-
-        vm.deal(alice, 100 ether);
-        vm.deal(bob, 100 ether);
-    }
-
+contract NamespaceTest is ForkBase {
     // ── slotting ────────────────────────────────────────────────────────────
 
     /// @notice One call registers the name and creates the slot behind it.
@@ -129,13 +42,13 @@ contract ForkSepoliaTest is Test {
         _slot("sponsor", address(0), false);
         vm.prank(owner);
         vm.expectRevert();
-        namespace.slotLabel("sponsor", SlotNamespace.LabelKind.COMMON, address(0), bytes32(0), false);
+        namespace.slotLabel("sponsor", SlotNamespaceBase.LabelKind.COMMON, address(0), bytes32(0), false);
     }
 
     function test_OnlyTheOwnerMaySlot() public {
         vm.prank(alice);
         vm.expectRevert();
-        namespace.slotLabel("sponsor", SlotNamespace.LabelKind.COMMON, address(0), bytes32(0), false);
+        namespace.slotLabel("sponsor", SlotNamespaceBase.LabelKind.COMMON, address(0), bytes32(0), false);
     }
 
     // ── the name follows the slot ───────────────────────────────────────────
@@ -282,29 +195,6 @@ contract ForkSepoliaTest is Test {
         assertEq(namespace.textOf(PARENT_NODE, "url"), "");
     }
 
-    /**
-     * @notice The parent name resolves through the same resolver its subnames do.
-     *
-     * @dev The path a client actually takes: DNS-encoded name → namehash →
-     *      `textOf`. Nothing here knows the parent is special, which is the
-     *      test — the resolver derives a node and asks, and the namespace
-     *      answers for whichever kind of node it turned out to be.
-     */
-    function test_TheResolverAnswersForTheParentName() public {
-        vm.prank(owner);
-        namespace.setParentText("description", "The namespace itself.");
-
-        bytes memory answer = resolver.resolve(
-            _dnsEncode("slotsdemo", "eth"), abi.encodeWithSelector(bytes4(0x59d1d43c), bytes32(0), "description")
-        );
-        assertEq(abi.decode(answer, (string)), "The namespace itself.");
-
-        // The parent is not a slot, so it has no occupant. Zero is the honest
-        // answer rather than a stand-in owner with no claim to the name.
-        answer = resolver.resolve(_dnsEncode("slotsdemo", "eth"), abi.encodeWithSelector(bytes4(0x3b3b57de), bytes32(0)));
-        assertEq(abi.decode(answer, (address)), address(0));
-    }
-
     // ── unslotting ──────────────────────────────────────────────────────────
 
     function test_AVacantLabelCanBeUnslotted() public {
@@ -327,7 +217,7 @@ contract ForkSepoliaTest is Test {
         _take(slot, alice, 1 ether);
 
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(SlotNamespace.SlotOccupied.selector, alice));
+        vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.SlotOccupied.selector, alice));
         namespace.unslotLabel("sponsor");
     }
 
@@ -336,32 +226,8 @@ contract ForkSepoliaTest is Test {
         _slot("forever", address(0), true);
 
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(SlotNamespace.PermanentlySlotted.selector, "forever"));
+        vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.PermanentlySlotted.selector, "forever"));
         namespace.unslotLabel("forever");
-    }
-
-    // ── the ENS-facing surface ──────────────────────────────────────────────
-
-    /// @notice What the Universal Resolver will actually call.
-    function test_TheResolverAnswersTheExtendedProfile() public {
-        (address slot,) = _slot("sponsor", address(0), false);
-        _take(slot, alice, 1 ether);
-
-        bytes memory dnsName = _dnsEncode("sponsor", "slotsdemo", "eth");
-
-        bytes memory answer = resolver.resolve(dnsName, abi.encodeWithSelector(bytes4(0x3b3b57de), bytes32(0)));
-        assertEq(abi.decode(answer, (address)), alice, "addr(bytes32)");
-
-        vm.prank(alice);
-        namespace.setText(_node("sponsor"), "url", "https://example.com");
-
-        answer = resolver.resolve(dnsName, abi.encodeWithSelector(bytes4(0x59d1d43c), bytes32(0), "url"));
-        assertEq(abi.decode(answer, (string)), "https://example.com", "text(bytes32,string)");
-    }
-
-    /// @dev Without this the Universal Resolver refuses a namespace resolver.
-    function test_TheResolverDeclaresTheExtendedInterface() public view {
-        assertTrue(resolver.supportsInterface(0x9061b923));
     }
 
     // ── listing, which is all the client has ────────────────────────────────
@@ -395,36 +261,17 @@ contract ForkSepoliaTest is Test {
         assertEq(labels[1], "b");
     }
 
-    /// @notice The factory is the only answer to "which parents have slots".
-    function test_TheFactoryRecordsEveryNamespaceItOpens() public {
-        SlotNamespaceFactory factory = new SlotNamespaceFactory(ISlotFactory(SepoliaAddresses.SLOT_FACTORY));
-
-        // Hoisted, and it has to be: arguments are evaluated before the call,
-        // so an inline `namespace.terms()` would be the call `expectRevert`
-        // caught — and it succeeds.
-        SlotInit memory t = namespace.terms();
-
-        (SlotNamespace ns,) = factory.open(registry, PARENT_NODE, "slotsdemo.eth", t, owner);
-
-        assertEq(factory.count(), 1);
-        assertEq(factory.all()[0], address(ns));
-        assertEq(factory.namespaceOf(PARENT_NODE), address(ns));
-
-        vm.expectRevert(abi.encodeWithSelector(SlotNamespaceFactory.AlreadyOpened.selector, PARENT_NODE, address(ns)));
-        factory.open(registry, PARENT_NODE, "slotsdemo.eth", t, owner);
-    }
-
     // ── what kind of label it is ────────────────────────────────────────────
 
     /// @notice The kind is recorded when the label is opened, and listed.
     function test_ALabelDeclaresWhatKindOfMarketItIs() public {
-        _slot("identity", address(0), false, SlotNamespace.LabelKind.COMMON);
-        _slot("banner", address(0), false, SlotNamespace.LabelKind.SPONSORING);
+        _slot("identity", address(0), false, SlotNamespaceBase.LabelKind.COMMON);
+        _slot("banner", address(0), false, SlotNamespaceBase.LabelKind.SPONSORING);
 
-        (,,, SlotNamespace.LabelKind[] memory kinds) = namespace.listing();
-        assertEq(uint8(kinds[0]), uint8(SlotNamespace.LabelKind.COMMON));
-        assertEq(uint8(kinds[1]), uint8(SlotNamespace.LabelKind.SPONSORING));
-        assertEq(uint8(namespace.kindOfNode(_node("banner"))), uint8(SlotNamespace.LabelKind.SPONSORING));
+        (,,, SlotNamespaceBase.LabelKind[] memory kinds) = namespace.listing();
+        assertEq(uint8(kinds[0]), uint8(SlotNamespaceBase.LabelKind.COMMON));
+        assertEq(uint8(kinds[1]), uint8(SlotNamespaceBase.LabelKind.SPONSORING));
+        assertEq(uint8(namespace.kindOfNode(_node("banner"))), uint8(SlotNamespaceBase.LabelKind.SPONSORING));
     }
 
     /**
@@ -432,70 +279,33 @@ contract ForkSepoliaTest is Test {
      *         holder of an ordinary label can still publish a sponsor record.
      */
     function test_TheKindIsADeclarationAndNotAPermission() public {
-        (address slot,) = _slot("identity", address(0), false, SlotNamespace.LabelKind.COMMON);
+        (address slot,) = _slot("identity", address(0), false, SlotNamespaceBase.LabelKind.COMMON);
         _take(slot, alice, 1 ether);
 
         vm.prank(alice);
-        namespace.setText(_node("identity"), "org.0xslots.sponsor", "{\"v\":1}");
-        assertEq(namespace.textOf(_node("identity"), "org.0xslots.sponsor"), "{\"v\":1}");
+        namespace.setText(_node("identity"), "com.ethglobal.sponsor", "{\"v\":1}");
+        assertEq(namespace.textOf(_node("identity"), "com.ethglobal.sponsor"), "{\"v\":1}");
     }
 
     /// @notice A mislabelled space can be corrected without evicting anyone.
     function test_TheKindCanBeCorrectedWhileOccupied() public {
-        (address slot,) = _slot("banner", address(0), false, SlotNamespace.LabelKind.COMMON);
+        (address slot,) = _slot("banner", address(0), false, SlotNamespaceBase.LabelKind.COMMON);
         _take(slot, alice, 1 ether);
 
         vm.prank(owner);
-        namespace.setKind("banner", SlotNamespace.LabelKind.SPONSORING);
+        namespace.setKind("banner", SlotNamespaceBase.LabelKind.SPONSORING);
 
-        assertEq(uint8(namespace.kindOfNode(_node("banner"))), uint8(SlotNamespace.LabelKind.SPONSORING));
+        assertEq(uint8(namespace.kindOfNode(_node("banner"))), uint8(SlotNamespaceBase.LabelKind.SPONSORING));
         assertEq(namespace.addrOf(_node("banner")), alice, "and alice still holds it");
     }
 
     /// @notice Records are the occupant's, and nobody else's — not even the owner.
     function test_OnlyTheOccupantWritesRecords() public {
-        (address slot,) = _slot("banner", address(0), false, SlotNamespace.LabelKind.SPONSORING);
+        (address slot,) = _slot("banner", address(0), false, SlotNamespaceBase.LabelKind.SPONSORING);
         _take(slot, alice, 1 ether);
 
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(SlotNamespace.NotOccupant.selector, owner, alice));
-        namespace.setText(_node("banner"), "org.0xslots.sponsor", "not yours");
-    }
-
-    // ── helpers ─────────────────────────────────────────────────────────────
-
-    function _slot(string memory label, address hook, bool permanent) internal returns (address slot, uint256 tokenId) {
-        return _slot(label, hook, permanent, SlotNamespace.LabelKind.COMMON);
-    }
-
-    function _slot(string memory label, address hook, bool permanent, SlotNamespace.LabelKind kind)
-        internal
-        returns (address slot, uint256 tokenId)
-    {
-        vm.prank(owner);
-        return namespace.slotLabel(label, kind, hook, bytes32(0), permanent);
-    }
-
-    /// @dev Buy `slot` for `who` at `price`, funding the protocol's floor.
-    function _take(address slot, address who, uint256 price) internal {
-        uint256 dep = ISlot(slot).minDepositForBuy(price);
-        uint256 owed = ISlot(slot).quoteBuy(who, dep);
-        vm.prank(who);
-        ISlot(slot).buy{value: owed}(who, price, dep, type(uint256).max);
-    }
-
-    function _node(string memory label) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(PARENT_NODE, keccak256(bytes(label))));
-    }
-
-    /// @dev `sponsor.slotsdemo.eth` → `\x07sponsor\x09slotsdemo\x03eth\x00`
-    function _dnsEncode(string memory a, string memory b, string memory c) internal pure returns (bytes memory) {
-        return
-            abi.encodePacked(uint8(bytes(a).length), a, uint8(bytes(b).length), b, uint8(bytes(c).length), c, uint8(0));
-    }
-
-    /// @dev `slotsdemo.eth` → `\x09slotsdemo\x03eth\x00`
-    function _dnsEncode(string memory a, string memory b) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(bytes(a).length), a, uint8(bytes(b).length), b, uint8(0));
+        vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.NotOccupant.selector, owner, alice));
+        namespace.setText(_node("banner"), "com.ethglobal.sponsor", "not yours");
     }
 }

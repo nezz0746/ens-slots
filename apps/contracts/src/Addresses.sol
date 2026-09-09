@@ -5,18 +5,13 @@ pragma solidity ^0.8.24;
  * @title SepoliaAddresses
  * @notice Everything this project talks to on Ethereum Sepolia.
  *
- * @dev Two deployments meet here, and they are both testnet-only.
- *
- *      The ENS side is the ETHOnline 2026 HACKATHON deployment, which is a
- *      separate set of contracts from the standard ENSv2 Beta on the same
- *      chain. Mixing the two is the mistake this file exists to prevent: a
- *      name registered against one is invisible to the other, and both answer
- *      on Sepolia. Clients must also override the Universal Resolver built
- *      into viem/ethers with {ENS_UNIVERSAL_RESOLVER} below, or resolution
- *      silently goes to the wrong deployment.
+ * @dev Testnet only. The ENS side is the ETHOnline 2026 HACKATHON deployment,
+ *      a separate set of contracts from the standard ENSv2 Beta on the same
+ *      chain — a name registered against one is invisible to the other, and
+ *      both answer on Sepolia. Clients must override viem/ethers' built-in
+ *      Universal Resolver with {ENS_UNIVERSAL_RESOLVER}.
  */
 library SepoliaAddresses {
-    // ─── ENSv2, ETHOnline 2026 hackathon deployment ─────────────────────────
 
     /// @notice `UpgradableUniversalResolverProxy` — the one clients must use.
     address internal constant ENS_UNIVERSAL_RESOLVER = 0xd26f2040D083Af1cD2962ba303F4BEa0c4faf142;
@@ -42,8 +37,6 @@ library SepoliaAddresses {
     address internal constant ENS_MOCK_USDC = 0xcBFD80F74375c54E545AF34788Ff465F96F66F05;
     address internal constant ENS_MOCK_DAI = 0x93403a98c3A6be906585CD0D68447c0Fc600FB38;
 
-    // ─── 0xSlots ────────────────────────────────────────────────────────────
-
     /// @notice Creates one continuously taxed slot per slotted label.
     address internal constant SLOT_FACTORY = 0x14df7d78ef556A80F0AD3ede3F10F1e24f92E1cE;
 
@@ -51,8 +44,7 @@ library SepoliaAddresses {
     address internal constant SLOT_IMPLEMENTATION = 0xfc2Bf27aD41C9C4B23b675Ef5c270161Ab87f530;
 
     /// @notice A window inside which an occupant cannot be outbid cheaply.
-    /// @dev Optional per label — the hook slot stays free precisely so a
-    ///      slotted name can carry a policy like this one.
+    ///         Optional per label.
     address internal constant MINIMUM_TENURE_HOOK = 0xB1e68532Ba467b2310A931abcDD682E718426c9C;
 
     address internal constant ADLAND_HOOK = 0xA8079a3226C29D0D91DaDc698823Fd3cE96D7Ee7;

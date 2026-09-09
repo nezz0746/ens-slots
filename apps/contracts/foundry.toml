@@ -7,8 +7,28 @@ optimizer = true
 optimizer_runs = 200
 via_ir = false
 
+# `extra_output` is what `pnpm protocol layout` reads. The storage layout of the
+# three upgradeable contracts is the one thing no test can recover from getting
+# wrong — a beacon upgrade reinterprets every namespace's storage at once — so
+# it is emitted on every build and diffed against a committed snapshot.
+extra_output = ["storageLayout"]
+
+# The deployment ledger. `deployments/<chainid>/<Name>.json` is the only record
+# of what is live, and the upgrade script refuses to act without it.
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+
 [rpc_endpoints]
 sepolia = "${SEPOLIA_RPC_URL}"
+local = "http://127.0.0.1:8545"
 
 [etherscan]
 sepolia = { key = "${ETHERSCAN_API_KEY}" }
+
+# Three notes fire on every build and none of them is actionable here.
+# `asm-keccak256` wants inline assembly in the namehash walk, which is the one
+# place in this codebase where being readable beats being cheap;
+# `unsafe-typecast` is the resolver reading a 4-byte selector off calldata, which
+# is what a selector IS; and `unsafe-cheatcode` is the deployment ledger writing
+# files, which is its whole job.
+[lint]
+exclude_lints = ["asm-keccak256", "unsafe-typecast", "unsafe-cheatcode"]

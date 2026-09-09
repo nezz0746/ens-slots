@@ -1,0 +1,56 @@
+[
+  {
+    "label": "beacon",
+    "slot": 0,
+    "offset": 0,
+    "type": "contract UpgradeableBeacon"
+  },
+  {
+    "label": "admin",
+    "slot": 1,
+    "offset": 0,
+    "type": "address"
+  },
+  {
+    "label": "slotFactory",
+    "slot": 2,
+    "offset": 0,
+    "type": "contract ISlotFactory"
+  },
+  {
+    "label": "verifiableFactory",
+    "slot": 3,
+    "offset": 0,
+    "type": "contract IVerifiableFactory"
+  },
+  {
+    "label": "userRegistryImpl",
+    "slot": 4,
+    "offset": 0,
+    "type": "address"
+  },
+  {
+    "label": "resolver",
+    "slot": 5,
+    "offset": 0,
+    "type": "address"
+  },
+  {
+    "label": "_namespaces",
+    "slot": 6,
+    "offset": 0,
+    "type": "address[]"
+  },
+  {
+    "label": "namespaceOf",
+    "slot": 7,
+    "offset": 0,
+    "type": "mapping(bytes32 => address)"
+  },
+  {
+    "label": "__gap",
+    "slot": 8,
+    "offset": 0,
+    "type": "uint256[43]"
+  }
+]
