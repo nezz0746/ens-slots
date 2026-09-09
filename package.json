@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "turbo dev",
     "dev:local": "./scripts/dev-local.sh",
-    "build:app": "turbo build --filter=app",
-    "start:app": "turbo start --filter=app",
+    "build:app": "turbo build --filter=@ens-slots/web",
+    "start:app": "turbo start --filter=@ens-slots/web",
     "chain": "./scripts/dev-chain.sh",
     "seed": "./scripts/seed.sh",
     "build": "turbo build",
