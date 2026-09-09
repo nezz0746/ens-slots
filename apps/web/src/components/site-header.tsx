@@ -14,8 +14,11 @@ export function SiteHeader() {
       <div className="flex w-full items-center gap-4 px-5 py-3 lg:px-8">
         <Link href="/" className="flex items-center gap-2">
           <Mark className="size-7" />
-          <span className="text-sm font-semibold tracking-tight">
-            ens-slots
+          {/* Never wrapped. The old wordmark was one unbreakable token; this
+              one has a space in it, and a narrow window broke it over two
+              lines and stretched the header to match. */}
+          <span className="text-sm font-semibold tracking-tight whitespace-nowrap">
+            ENS Slots
           </span>
         </Link>
 

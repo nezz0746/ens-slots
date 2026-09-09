@@ -59,13 +59,21 @@
   --radius-card: 1rem;
 
   /*
-   * ENS sets its own type in Satoshi. The brand page publishes no font stack
-   * and no licence terms for it, so this stays on the system stack rather than
-   * pulling a webfont on an assumption. It is the one part of the identity
-   * this app does not borrow.
+   * Urbanist — our type, not ENS's.
+   *
+   * ENS sets itself in Satoshi, whose brand page publishes no font stack and no
+   * licence terms, so this is not an attempt to approximate it. Urbanist is a
+   * geometric sans under the SIL Open Font License, chosen on its own merits.
+   * Type is the one part of the identity this app does not borrow — the colours
+   * are theirs, the letterforms and the mark are ours.
+   *
+   * `--font-urbanist` is defined by `next/font` in {RootLayout}, which also
+   * emits a metric-matched fallback behind it. The system stack below is the
+   * last resort, for the case where the font asset itself fails to load.
    */
   --font-sans:
-    ui-sans-serif, -apple-system, "Inter", "Segoe UI", system-ui, sans-serif;
+    var(--font-urbanist), ui-sans-serif, -apple-system, "Inter", "Segoe UI",
+    system-ui, sans-serif;
 }
 
 html {

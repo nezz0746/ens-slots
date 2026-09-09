@@ -35,11 +35,9 @@ export default function Home() {
        */}
       <section className="grid items-center gap-8 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
         <div className="space-y-4">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-surface/70 px-3 py-1 text-[11px] font-medium text-brand-ink">
-            <span className="size-1.5 rounded-full bg-brand" />
-            Common ownership spaces on ENSv2
-          </span>
-          <h1 className="max-w-2xl text-4xl leading-[1.1] font-semibold tracking-tight text-balance">
+          {/* Steps up rather than jumping: 3rem is a headline on a laptop and
+              a wall of text on a phone, so the small screen keeps the old size. */}
+          <h1 className="max-w-2xl text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl">
             Sponsor a name that is{" "}
             <span className="text-brand">always for sale</span>
           </h1>
