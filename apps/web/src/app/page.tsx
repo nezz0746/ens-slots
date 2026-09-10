@@ -38,13 +38,13 @@ export default function Home() {
           {/* Steps up rather than jumping: 3rem is a headline on a laptop and
               a wall of text on a phone, so the small screen keeps the old size. */}
           <h1 className="max-w-2xl text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl">
-            <span className="text-brand">Rentable</span> ENS subnames
+            <span className="text-brand">Taxable</span> subnames
           </h1>
           <p className="max-w-xl text-sm leading-relaxed text-ink-soft">
-            Open subnames of a name you own. Whoever holds one sets its price,
-            pays tax on it continuously, and can be taken out by anyone willing
-            to pay that price. Nothing can be squatted, and the name resolves to
-            whoever holds it through plain ENS.
+            Open subnames of a name you own. Whoever holds one sets what it is
+            worth and pays tax on that number for as long as they keep it —
+            which is also the price anyone can take it from them at. Nothing can
+            be squatted, and the name resolves through plain ENS.
           </p>
         </div>
 

@@ -1,4 +1,4 @@
-ENSv2 — WORKING REFERENCE FOR ens-slots
+ENSv2 — WORKING REFERENCE FOR nameslots
 =======================================
 
 A digest of the ENSv2 documentation, kept in-repo so this project can be read

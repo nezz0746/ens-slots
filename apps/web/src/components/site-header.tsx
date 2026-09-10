@@ -13,21 +13,16 @@ export function SiteHeader() {
     <header className="sticky top-0 z-20 border-b border-line/70 bg-surface/60 backdrop-blur-xl">
       <div className="flex w-full items-center gap-4 px-5 py-3 lg:px-8">
         <Link href="/" className="flex items-center gap-2">
-          <Mark className="size-7" />
-          {/* Never wrapped. The old wordmark was one unbreakable token; this
-              one has a space in it, and a narrow window broke it over two
-              lines and stretched the header to match. */}
-          <span className="text-sm font-semibold tracking-tight whitespace-nowrap">
-            ENS Slots
+          <Mark className="size-5" />
+          {/* Never wrapped. It is one token again now that the space is gone,
+              but the guard stays: a wordmark that breaks over two lines
+              stretches the whole header to match, and that regressed once. */}
+          <span className="font-bold text-2xl tracking-tight whitespace-nowrap">
+            Nameslots
           </span>
         </Link>
 
         <nav className="ml-2 flex items-center gap-1 text-sm">
-          <Link href="/">
-            <Button variant="ghost" size="sm">
-              Namespaces
-            </Button>
-          </Link>
           <Link href="/register">
             <Button variant="ghost" size="sm">
               Open one

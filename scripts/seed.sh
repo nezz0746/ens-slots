@@ -123,7 +123,7 @@ register_parent() {          # $1 = label, $2 = the UserRegistry to point it at
     exit 1
   fi
 
-  secret=$(cast keccak "ens-slots-seed-$label")
+  secret=$(cast keccak "nameslots-seed-$label")
 
   # `getRegisterPrice` returns (base, premium); the registrar pulls their sum.
   price=$(call "$ENS_ETH_REGISTRAR" "getRegisterPrice(string,uint64,address)(uint256,uint256)" \

@@ -4,7 +4,7 @@ import { OG_CONTENT_TYPE, OG_SIZE, OgFrame, ogFonts } from "./_og/frame";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "ENS Slots — rentable ENS subnames";
+export const alt = "Nameslots — taxable subnames";
 
 /**
  * The card for the front page.
@@ -18,12 +18,12 @@ export default async function Image() {
   return new ImageResponse(
     (
       <OgFrame
-        title="Rentable ENS subnames"
-        subtitle="Whoever holds one sets its price, pays tax on it continuously, and can be taken out by anyone willing to pay that price."
+        title="Taxable subnames"
+        subtitle="Subnames of a name you own, opened to a market. The holder sets what one is worth and pays tax on that number for as long as they keep it."
         facts={[
           { label: "Priced by", value: "Whoever holds it", tone: "brand" },
+          { label: "Taxed", value: "Continuously" },
           { label: "Taken by", value: "Anyone who pays", tone: "hot" },
-          { label: "Read with", value: "Plain ENS" },
         ]}
       />
     ),

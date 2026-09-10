@@ -4,7 +4,7 @@ import { OG_CONTENT_TYPE, OG_SIZE, OgFrame, ogFonts } from "../_og/frame";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "Open a namespace on ENS Slots";
+export const alt = "Open a namespace on Nameslots";
 
 /**
  * The card for the page that opens a namespace.
