@@ -326,8 +326,14 @@ contract SlotNamespaceFactory is VersionedUUPS {
 
     /// @inheritdoc Versioned
     /// @dev Bump alongside any change to this contract.
+    ///      2: `open` takes three choices and a name. Version 1 shipped to
+    ///      Sepolia and then `OpenParams` and `LabelSpec` both changed shape
+    ///      without this number moving, so the live factory answered a
+    ///      selector the app no longer sent and every `open` reverted with no
+    ///      reason at all. The signature is the contract; changing it is a
+    ///      version.
     function version() public pure virtual override returns (uint64) {
-        return 1;
+        return 2;
     }
 
     function _authorizeUpgrade(address) internal override onlyAdmin {}

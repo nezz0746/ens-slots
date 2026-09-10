@@ -72,8 +72,13 @@ contract SlotNamespace is
 
     /// @inheritdoc Versioned
     /// @dev Bump alongside any change here or under `namespace/`.
+    ///      4: `LabelSpec` lost its hook fields and gained `minTenureSeconds`,
+    ///      which changes `initialize`'s signature. That happened under a 3
+    ///      that was already on Sepolia — two different implementations both
+    ///      calling themselves 3 — so the number is the thing to get right
+    ///      here, not the code.
     function version() public pure virtual override returns (uint64) {
-        return 3;
+        return 4;
     }
 
     /// @notice Stand this namespace up — called by the factory in the same

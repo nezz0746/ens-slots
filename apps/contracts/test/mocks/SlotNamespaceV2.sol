@@ -30,21 +30,25 @@ contract SlotNamespaceV2 is SlotNamespace {
         tagline = t;
     }
 
-    /// @dev One ahead of {SlotNamespace}'s own `version()`. Bump both together.
+    /// @dev One ahead of whatever {SlotNamespace} currently is, derived rather
+    ///      than written down. It used to be a literal with a comment saying
+    ///      "bump both together" — and a comment is not a mechanism. The real
+    ///      `version()` moved for a Sepolia fix and these tests were what
+    ///      noticed, which is the wrong thing to have to notice.
     function version() public pure override returns (uint64) {
-        return 4;
+        return super.version() + 1;
     }
 }
 
 contract SlotNamespaceFactoryV2 is SlotNamespaceFactory {
     function version() public pure override returns (uint64) {
-        return 2;
+        return super.version() + 1;
     }
 }
 
 contract SlotNamespaceResolverV2 is SlotNamespaceResolver {
     function version() public pure override returns (uint64) {
-        return 2;
+        return super.version() + 1;
     }
 }
 

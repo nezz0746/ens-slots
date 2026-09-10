@@ -31,15 +31,20 @@ contract UpgradesTest is ForkBase {
     function test_OneUpgradeMovesEveryNamespaceAtOnce() public {
         (address second,) = _open("secondname.eth", _noLabels());
 
-        assertEq(namespace.version(), 3);
-        assertEq(SlotNamespace(payable(second)).version(), 3);
+        uint64 before = namespace.version();
+        assertEq(SlotNamespace(payable(second)).version(), before);
 
-        address v2 = address(new SlotNamespaceV2());
+        SlotNamespaceV2 impl = new SlotNamespaceV2();
         vm.prank(admin);
-        factory.upgradeBeacon(v2);
+        factory.upgradeBeacon(address(impl));
 
-        assertEq(namespace.version(), 4, "the first namespace took the new code");
-        assertEq(SlotNamespace(payable(second)).version(), 4, "and so did the second, in the same transaction");
+        assertEq(namespace.version(), impl.version(), "the first namespace took the new code");
+        assertEq(
+            SlotNamespace(payable(second)).version(),
+            impl.version(),
+            "and so did the second, in the same transaction"
+        );
+        assertGt(impl.version(), before, "and the new code really is newer");
     }
 
     /**
@@ -119,12 +124,12 @@ contract UpgradesTest is ForkBase {
 
     /// @notice A namespace opened AFTER an upgrade gets the new code too.
     function test_NamespacesOpenedLaterGetTheCurrentImplementation() public {
-        address v2 = address(new SlotNamespaceV2());
+        SlotNamespaceV2 impl = new SlotNamespaceV2();
         vm.prank(admin);
-        factory.upgradeBeacon(v2);
+        factory.upgradeBeacon(address(impl));
 
         (address later,) = _open("latername.eth", _noLabels());
-        assertEq(SlotNamespace(payable(later)).version(), 4);
+        assertEq(SlotNamespace(payable(later)).version(), impl.version());
     }
 
     // ─── who may do it ──────────────────────────────────────────────────────
@@ -176,15 +181,15 @@ contract UpgradesTest is ForkBase {
         factory.transferAdmin(multisig);
         assertEq(factory.admin(), multisig);
 
-        address v2 = address(new SlotNamespaceV2());
+        SlotNamespaceV2 impl = new SlotNamespaceV2();
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(SlotNamespaceFactory.NotAdmin.selector, admin));
-        factory.upgradeBeacon(v2);
+        factory.upgradeBeacon(address(impl));
 
         vm.prank(multisig);
-        factory.upgradeBeacon(v2);
-        assertEq(namespace.version(), 4);
+        factory.upgradeBeacon(address(impl));
+        assertEq(namespace.version(), impl.version());
     }
 
     // ─── the UUPS singletons ────────────────────────────────────────────────
@@ -200,11 +205,11 @@ contract UpgradesTest is ForkBase {
         address beaconBefore = address(factory.beacon());
         address resolverBefore = factory.resolver();
 
-        address v2 = address(new SlotNamespaceFactoryV2());
+        SlotNamespaceFactoryV2 impl = new SlotNamespaceFactoryV2();
         vm.prank(admin);
-        factory.upgradeToAndCall(v2, "");
+        factory.upgradeToAndCall(address(impl), "");
 
-        assertEq(factory.version(), 2, "new code");
+        assertEq(factory.version(), impl.version(), "new code");
         assertEq(factory.count(), countBefore, "same namespaces");
         assertEq(factory.at(0), first);
         assertEq(factory.namespaceOf(PARENT_NODE), address(namespace));
@@ -220,12 +225,12 @@ contract UpgradesTest is ForkBase {
 
         address before = address(resolver);
 
-        address v2 = address(new SlotNamespaceResolverV2());
+        SlotNamespaceResolverV2 impl = new SlotNamespaceResolverV2();
         vm.prank(admin);
-        resolver.upgradeToAndCall(v2, "");
+        resolver.upgradeToAndCall(address(impl), "");
 
         assertEq(address(resolver), before, "the address ENS holds never moved");
-        assertEq(resolver.version(), 2);
+        assertEq(resolver.version(), impl.version());
         assertEq(address(resolver.factory()), address(factory));
 
         bytes memory answer = resolver.resolve(
