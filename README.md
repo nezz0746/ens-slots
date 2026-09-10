@@ -3,7 +3,7 @@
 **Rentable ENS subnames — self-priced, always for sale, never squattable.**
 
 A parent name's owner opens some of its subnames to a market. Whoever holds
-`slot-1.l2beat.eth` sets its price, pays tax on that price continuously, and
+`base.l2beat.eth` sets its price, pays tax on that price continuously, and
 can be taken out by anyone willing to pay it. Stop paying and you lose it.
 Every other subname under that parent is untouched.
 
@@ -195,19 +195,19 @@ New state is **appended above `__gap`**, decrementing the gap by what it takes.
 Yes — measured, not assumed:
 
 ```
-getEnsAddress({ name: "slot-1.l2beat.eth" })            → the current holder
-getEnsText({ name: "slot-1.l2beat.eth", key: "url" })   → what they published
+getEnsAddress({ name: "base.l2beat.eth" })            → the current holder
+getEnsText({ name: "base.l2beat.eth", key: "url" })   → what they published
 ```
 
 Straight off `pnpm dev:local`, with no argument that this is anything but
 ordinary ENS:
 
 ```
-slot-1.l2beat.eth        0x70997970C5   url            https://splits.org
-slot-1.l2beat.eth        0x70997970C5   description    Process revenue, move…
-slot-2.l2beat.eth        0x3C44CdDdB6   url            https://bankr.bot
-slot-2.l2beat.eth        0x3C44CdDdB6   com.twitter    bankrbot
-slot-3.l2beat.eth        null           —              nobody holds this
+base.l2beat.eth    2,400   0x70997970C5   url           https://base.org
+cool.l2beat.eth      600   0x3C44CdDdB6   url           https://bankr.bot
+cool.l2beat.eth      600   0x3C44CdDdB6   com.twitter   bankrbot
+rare.l2beat.eth      250   0x90F79bf6EB   —             held, nothing published
+fun.l2beat.eth         —   null           —             nobody holds this
 ```
 
 The parent names answer too, under the keys every ENS client already reads:

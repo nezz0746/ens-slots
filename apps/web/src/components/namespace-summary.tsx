@@ -1,7 +1,7 @@
 "use client";
 
 import { HandCoins, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatUnits } from "viem";
 import { useAccount } from "wagmi";
 
@@ -17,7 +17,7 @@ import { MONTH_SECONDS, rentFor } from "@/lib/runway";
 const TICK_MS = 2_000;
 
 /**
- * The whole namespace as three numbers, and the one action they imply.
+ * The whole namespace as three numbers, on one line, with the actions.
  *
  * Valuation is what the holders say the names are worth. Revenue is what that
  * costs them per month, which is the same number seen from the other side — it
@@ -25,9 +25,26 @@ const TICK_MS = 2_000;
  * the only form anyone can act on.
  *
  * Collectable is the one that moves. It is money already earned and sitting in
- * the slots, and the button next to it is what fetches it.
+ * the slots, and the button at the end of the row is what fetches it.
+ *
+ * ── Why one row and not three stacked cards ───────────────────────────────
+ *
+ * Each figure used to be a card with a label above it and a sub-line below,
+ * and the sub-line is empty whenever the currency is already dollars — which
+ * it is, here — so two thirds of the height was blank. Three labelled figures
+ * are a sentence, not a dashboard, and they fit on a line.
+ *
+ * `actions` is whatever the page wants beside "Collect all". It is a prop
+ * rather than something this component knows about, because the other button
+ * is the OWNER's and only the page knows whether it is looking at one.
  */
-export function NamespaceSummary({ namespace }: { namespace: Namespace }) {
+export function NamespaceSummary({
+  namespace,
+  actions,
+}: {
+  namespace: Namespace;
+  actions?: ReactNode;
+}) {
   // Priced in the protocol's own currency. When that is a dollar stablecoin
   // the USD line would just restate the figure above it, so it is dropped
   // rather than printed twice.
@@ -64,63 +81,59 @@ export function NamespaceSummary({ namespace }: { namespace: Namespace }) {
   const collectable = held.map((s) => s.slot);
 
   return (
-    <div className="grid gap-px overflow-hidden rounded-[--radius-card] border border-line bg-line sm:grid-cols-3">
-      <Figure
-        label="Held at"
-        value={`${trim(namespace.totalValue)} ${SYMBOL}`}
-        sub={showUsd ? formatUsd(usdOf(namespace.totalValue, price)) : null}
-      />
-      <Figure
-        label="Revenue"
-        value={`${trim(monthly)} ${SYMBOL}`}
-        sub={
-          showUsd && formatUsd(usdOf(monthly, price))
-            ? `${formatUsd(usdOf(monthly, price))} / month`
-            : "per month"
-        }
-      />
-
-      <div className="flex items-center justify-between gap-3 bg-surface px-4 py-3">
-        <div className="min-w-0">
-          <dt className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
-            Collectable
-          </dt>
-          <dd className="mt-0.5 truncate text-sm font-semibold tabular-nums">
-            <Accruing wei={ticking} tick={tick} />
-            <span className="ml-1 text-[11px] font-normal text-ink-faint">
-              {SYMBOL}
-            </span>
-          </dd>
-          <dd className="text-[11px] text-ink-faint tabular-nums">
-            {(showUsd ? formatUsd(usdOf(ticking, price)) : null) ?? " "}
-          </dd>
-        </div>
-
-        <Button
-          size="sm"
-          variant={collectableNow > 0n ? "primary" : "outline"}
-          // Disabled without a wallet, rather than failing on click. The
-          // button used to invite a press it could never honour, and answered
-          // with a line of wagmi's internals under the card.
-          disabled={busy || !isConnected || collectable.length === 0}
-          onClick={() => collectAll(collectable)}
-          title={
-            !isConnected
-              ? "Connect a wallet to collect"
-              : collectable.length === 0
-                ? "Nothing has accrued yet"
-                : batched
-                  ? "One transaction, through the factory"
-                  : "One transaction per slot — the factory on this chain predates collectAll"
+    <div className="rounded-[--radius-card] border border-line bg-surface">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5">
+        <Stat
+          label="Held at"
+          value={`${trim(namespace.totalValue)} ${SYMBOL}`}
+          sub={showUsd ? formatUsd(usdOf(namespace.totalValue, price)) : null}
+        />
+        <Stat
+          label="Revenue"
+          value={`${trim(monthly)} ${SYMBOL}/mo`}
+          sub={showUsd ? formatUsd(usdOf(monthly, price)) : null}
+        />
+        <Stat
+          label="Collectable"
+          value={
+            <>
+              <Accruing wei={ticking} tick={tick} />
+              <span className="ml-1 text-[11px] font-normal text-ink-faint">
+                {SYMBOL}
+              </span>
+            </>
           }
-        >
-          {busy ? <Loader2 className="animate-spin" /> : <HandCoins />}
-          {busy ? "Collecting…" : "Collect all"}
-        </Button>
+          sub={showUsd ? formatUsd(usdOf(ticking, price)) : null}
+        />
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {actions}
+          <Button
+            size="sm"
+            variant={collectableNow > 0n ? "primary" : "outline"}
+            // Disabled without a wallet, rather than failing on click. The
+            // button used to invite a press it could never honour, and answered
+            // with a line of wagmi's internals under the card.
+            disabled={busy || !isConnected || collectable.length === 0}
+            onClick={() => collectAll(collectable)}
+            title={
+              !isConnected
+                ? "Connect a wallet to collect"
+                : collectable.length === 0
+                  ? "Nothing has accrued yet"
+                  : batched
+                    ? "One transaction, through the factory"
+                    : "One transaction per slot — the factory on this chain predates collectAll"
+            }
+          >
+            {busy ? <Loader2 className="animate-spin" /> : <HandCoins />}
+            {busy ? "Collecting…" : "Collect all"}
+          </Button>
+        </div>
       </div>
 
       {error && (
-        <p className="bg-surface px-4 pb-3 text-[11px] text-hot sm:col-span-3">
+        <p className="border-t border-line-soft px-4 py-2 text-[11px] text-hot">
           {error}
         </p>
       )}
@@ -128,26 +141,31 @@ export function NamespaceSummary({ namespace }: { namespace: Namespace }) {
   );
 }
 
-function Figure({
+/**
+ * One labelled figure, on the line rather than stacked.
+ *
+ * The sub-line is DROPPED when there is nothing to say, instead of rendering a
+ * space to hold the row's height. Stacked, that blank mattered — the three
+ * cards had to agree on a height. Inline, nothing depends on it.
+ */
+function Stat({
   label,
   value,
   sub,
 }: {
   label: string;
-  value: string;
-  sub: string | null;
+  value: ReactNode;
+  sub?: string | null;
 }) {
   return (
-    <div className="bg-surface px-4 py-3">
-      <dt className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
         {label}
-      </dt>
-      <dd className="mt-0.5 truncate text-sm font-semibold tabular-nums">
-        {value}
-      </dd>
-      <dd className="text-[11px] text-ink-faint tabular-nums">
-        {sub ?? " "}
-      </dd>
+      </span>
+      <span className="text-sm font-semibold tabular-nums">{value}</span>
+      {sub && (
+        <span className="text-[11px] text-ink-faint tabular-nums">{sub}</span>
+      )}
     </div>
   );
 }

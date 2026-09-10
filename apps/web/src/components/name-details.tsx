@@ -48,13 +48,11 @@ export function NameDetails({
 
   return (
     <div className="space-y-4">
-      <header className="space-y-1">
-        <div className="flex items-start justify-between gap-3">
-          <h2 className="min-w-0 text-xl font-semibold tracking-tight">
-            {subname.label}
-            <span className="text-ink-faint">.{namespace.parentName}</span>
-          </h2>
-        </div>
+      <header className="space-y-0.5">
+        <h2 className="min-w-0 truncate text-xl font-semibold tracking-tight">
+          {subname.label}
+          <span className="text-ink-faint">.{namespace.parentName}</span>
+        </h2>
         <p className="text-xs text-ink-faint">
           {vacant ? (
             "Nobody holds this"

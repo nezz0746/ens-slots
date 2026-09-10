@@ -66,37 +66,59 @@ export default function NamespacePage({
   const current = namespace.subnames.find((s) => s.node === selected);
   const isOwner =
     !!me && namespace.owner.toLowerCase() === me.toLowerCase();
+  const meta = `${namespace.subnames.length} subnames · ${namespace.occupied} held · opened by ${shortAddress(namespace.owner)}`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-xs text-ink-faint transition-colors hover:text-ink"
-        >
-          <ChevronLeft className="size-3.5" />
-          All namespaces
-        </Link>
-        <div className="mt-2 flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">
+        {/*
+         * Back link, name and counts on ONE row.
+         *
+         * They were three stacked lines, and with the summary under them that
+         * put about 170px of chrome above the thing the page is for — the list
+         * of subnames. The counts are an aside to the name rather than a
+         * statement of their own, so they read fine beside it, and the back
+         * link is a chevron people already know without the label.
+         *
+         * Below `sm` the counts drop to their own line instead of squeezing
+         * the name, which is the one thing on this row that must stay legible.
+         */}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            title="All namespaces"
+            aria-label="All namespaces"
+            className="shrink-0 text-ink-faint transition-colors hover:text-ink"
+          >
+            <ChevronLeft className="size-4" />
+          </Link>
+          <h1 className="min-w-0 truncate text-xl font-semibold tracking-tight">
             {namespace.parentName}
           </h1>
-          {/*
-           * Only the owner, because only the owner can. `setParentTexts` is
-           * `onlyOwner`, so showing this to anybody else would offer a dialog
-           * whose Save can only revert. Disconnected has no `me` and so is not
-           * the owner either, which is the right answer for the same reason.
-           */}
-          {isOwner && <RootProfileEditor address={namespace.address} />}
+          <p className="hidden min-w-0 truncate text-xs text-ink-faint sm:block">
+            {meta}
+          </p>
         </div>
-        <p className="mt-1 text-xs text-ink-faint">
-          {namespace.subnames.length} spaces · {namespace.occupied} held ·
-          opened by{" "}
-          {shortAddress(namespace.owner)}
-        </p>
+        <p className="mt-1 truncate text-xs text-ink-faint sm:hidden">{meta}</p>
 
-        <div className="mt-4">
-          <NamespaceSummary namespace={namespace} />
+        {/*
+         * The two buttons sit together at the end of the figures row rather
+         * than one up beside the title and one down here. They are the only
+         * two actions on the page and putting them side by side is the whole
+         * reason the figures moved onto a line.
+         *
+         * Only the owner gets the editor, because only the owner can:
+         * `setParentTexts` is `onlyOwner`, so showing it to anybody else would
+         * offer a dialog whose Save can only revert. Disconnected has no `me`
+         * and so is not the owner either, which is right for the same reason.
+         */}
+        <div className="mt-2">
+          <NamespaceSummary
+            namespace={namespace}
+            actions={
+              isOwner ? <RootProfileEditor address={namespace.address} /> : null
+            }
+          />
         </div>
       </div>
 

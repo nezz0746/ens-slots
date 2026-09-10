@@ -119,7 +119,7 @@ function Snippet() {
     ["k", "await"],
     ["p", " client.getEnsAddress({\n"],
     ["p", "  name: "],
-    ["s", '"slot-1.l2beat.eth"'],
+    ["s", '"base.l2beat.eth"'],
     ["p", ",\n});\n\n"],
     ["c", "// → 0x7099…79C8 — whoever holds it right now"],
   ];

@@ -30,6 +30,8 @@ ALICE=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 ALICE_PK=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 BOB=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
 BOB_PK=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+CAROL=0x90F79bf6EB2c4f870365E785982E1f101E93b906
+CAROL_PK=0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
 
 SLOT_FACTORY=0x14df7d78ef556A80F0AD3ede3F10F1e24f92E1cE
 ENS_VF=0x894bc9cC8ff1ad96B8a288C86A8C71D662C07780
@@ -78,7 +80,7 @@ call() { cast call --rpc-url "$RPC" "$@"; }
 #
 # Clearing the code locally turns them back into the EOAs everyone assumes they
 # are. Local only, and invisible to anything but this chain.
-for a in "$DEPLOYER" "$ALICE" "$BOB" 0x90F79bf6EB2c4f870365E785982E1f101E93b906; do
+for a in "$DEPLOYER" "$ALICE" "$BOB" "$CAROL"; do
   cast rpc anvil_setCode "$a" 0x --rpc-url "$RPC" >/dev/null
 done
 
@@ -259,11 +261,12 @@ take() {                     # $1 = namespace, $2 = label, $3 = pk, $4 = who, $5
 # Lowercase, and not a stylistic choice: ENSIP-15 normalises labels to lower
 # case, so `l2Beat` is not a name that can exist. `l2beat` is.
 #
-# `slot-1..3` are deliberately plain. A namespace does not care what its labels
-# are for, and a name like `press` or `pool` would suggest it does.
+# `base`, `rare`, `cool`, `fun` — short, ordinary words, the kind of subname
+# somebody actually wants. Four of them because three could not show a spread
+# and four can.
 
 echo "→ l2beat.eth"
-L2BEAT=$(open_namespace l2beat "$(spec slot-1)" "$(spec slot-2)" "$(spec slot-3)")
+L2BEAT=$(open_namespace l2beat "$(spec base)" "$(spec rare)" "$(spec cool)" "$(spec fun)")
 
 # ── what the namespace says about itself ────────────────────────────────────
 #
@@ -322,12 +325,29 @@ set_parent_record "$L2BEAT" com.github  "https://github.com/l2beat"
 
 # ── occupancy ───────────────────────────────────────────────────────────────
 #
-# Two of the three held, one left vacant. An empty name is the state a visitor
-# is most likely to arrive on and the only one from which the buy flow can be
-# demonstrated, so the seed has to leave one.
+# ── and what they are worth ──────────────────────────────────────────────────
+#
+# The spread is the whole demonstration, and it has to be wide to read as one.
+# Every name here was opened on IDENTICAL terms — same tax rate, same minimum
+# tenure, same hook — so nothing in the contract knows that `base` is worth ten
+# times `rare`. That number is not a property of the name. It is what the person
+# holding it decided to expose themselves to, and the only reason it is true is
+# that anybody may take the name at it.
+#
+# Which is also why the ordering is not by length. `fun` is the shortest label
+# here and it is the one nobody has taken; `base` is the one an L2 index has
+# obvious demand for. Rarity is a story people tell about names — demand is what
+# actually prices them, and a seed that ranked these by character count would be
+# demonstrating the story rather than the mechanism.
+#
+# `fun` is left vacant on purpose. An empty name is the state a visitor is most
+# likely to arrive on and the only one from which the buy flow can be shown, so
+# the seed has to leave one — and leaving the cheapest-looking one means trying
+# it costs a visitor the least.
 echo "→ occupancy"
-take "$L2BEAT" slot-1 "$ALICE_PK" "$ALICE" $((900 * USDC))
-take "$L2BEAT" slot-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
+take "$L2BEAT" base "$ALICE_PK" "$ALICE" $((2400 * USDC))
+take "$L2BEAT" cool "$BOB_PK"   "$BOB"   $((600 * USDC))
+take "$L2BEAT" rare "$CAROL_PK" "$CAROL" $((250 * USDC))
 
 # ── what the occupants have published ───────────────────────────────────────
 #
@@ -336,11 +356,15 @@ take "$L2BEAT" slot-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
 # which is the part worth seeing on screen.
 echo "→ records"
 
-set_record "$L2BEAT" slot-1 "$ALICE_PK" url "https://splits.org"
-set_record "$L2BEAT" slot-1 "$ALICE_PK" description "Process revenue, move money, run operations globally."
+set_record "$L2BEAT" base "$ALICE_PK" url "https://base.org"
+set_record "$L2BEAT" base "$ALICE_PK" description "The L2 this name points at, for as long as Alice keeps paying for it."
 
-set_record "$L2BEAT" slot-2 "$BOB_PK" url "https://bankr.bot"
-set_record "$L2BEAT" slot-2 "$BOB_PK" com.twitter "bankrbot"
+set_record "$L2BEAT" cool "$BOB_PK" url "https://bankr.bot"
+set_record "$L2BEAT" cool "$BOB_PK" com.twitter "bankrbot"
+
+# `rare` is held but says nothing. Occupying a name and publishing under it are
+# separate acts, and a seed where every held name carried records would suggest
+# the second follows from the first.
 
 # The app's address book, regenerated from the ledgers this deploy just wrote
 # and the constants in `Addresses.sol`. Every chain with a ledger gets an entry,
