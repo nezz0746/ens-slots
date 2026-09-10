@@ -42,13 +42,13 @@ contract NamespaceTest is ForkBase {
         _slot("alpha", address(0), false);
         vm.prank(owner);
         vm.expectRevert();
-        namespace.slotLabel("alpha", address(0), bytes32(0), 0, false);
+        namespace.slotLabel("alpha", TAX_BPS, 0, false);
     }
 
     function test_OnlyTheOwnerMaySlot() public {
         vm.prank(alice);
         vm.expectRevert();
-        namespace.slotLabel("alpha", address(0), bytes32(0), 0, false);
+        namespace.slotLabel("alpha", TAX_BPS, 0, false);
     }
 
     // ── the name follows the slot ───────────────────────────────────────────

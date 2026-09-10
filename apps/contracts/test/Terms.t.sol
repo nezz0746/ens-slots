@@ -45,11 +45,11 @@ contract TermsTest is ForkBase {
 
         // And the authority is real, not cosmetic.
         vm.prank(bob);
-        namespace.slotLabel("bobs", address(0), bytes32(0), 0, false);
+        namespace.slotLabel("bobs", TAX_BPS, 0, false);
 
         vm.prank(owner);
         vm.expectRevert();
-        namespace.slotLabel("sellers", address(0), bytes32(0), 0, false);
+        namespace.slotLabel("sellers", TAX_BPS, 0, false);
     }
 
     /// @notice Ownership is not a thing you hand over here. The name is.
@@ -80,8 +80,6 @@ contract TermsTest is ForkBase {
                     registry: IPermissionedRegistry(address(0)),
                     parentName: bad[i],
                     currency: IERC20(address(0)),
-                    taxBps: TAX_BPS,
-                    minTenureSeconds: 0,
                     labels: _noLabels()
                 })
             );
@@ -90,13 +88,42 @@ contract TermsTest is ForkBase {
 
     // ─── terms, per label and changeable ────────────────────────────────────
 
-    /// @notice A label may be opened at its own rate. Zero inherits.
-    function test_ALabelCanCarryItsOwnTaxRate() public {
+    /// @notice Every label states its own rate. There is nothing to inherit.
+    function test_EachLabelCarriesItsOwnTaxRate() public {
         (address dear,) = _slot("dear", address(0), false, 2_000);
-        (address plain,) = _slot("plain", address(0), false, 0);
+        (address cheap,) = _slot("cheap", address(0), false, 250);
 
-        assertEq(ISlot(dear).taxBps(), 2_000, "its own rate");
-        assertEq(ISlot(plain).taxBps(), TAX_BPS, "the namespace's");
+        assertEq(ISlot(dear).taxBps(), 2_000);
+        assertEq(ISlot(cheap).taxBps(), 250);
+    }
+
+    /**
+     * @notice A rate of zero is refused, and refused HERE.
+     *
+     * Zero used to mean "inherit the namespace's", which is why it is worth a
+     * test of its own: the word that once meant absence now means an invalid
+     * value, and the failure carries the label so it is obvious which of a
+     * batch was wrong.
+     */
+    function test_ALabelCannotOpenWithoutARate() public {
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.InvalidTax.selector, "free"));
+        namespace.slotLabel("free", 0, 0, false);
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.InvalidTax.selector, "greedy"));
+        namespace.slotLabel("greedy", 10_001, 0, false);
+    }
+
+    /// @notice A guaranteed run is per label too, and zero is a real answer.
+    function test_EachLabelCarriesItsOwnGuaranteedRun() public {
+        vm.startPrank(owner);
+        (address safe,) = namespace.slotLabel("safe", TAX_BPS, 3 days, false);
+        (address open_,) = namespace.slotLabel("openrun", TAX_BPS, 0, false);
+        vm.stopPrank();
+
+        assertEq(ISlot(safe).hookData(), bytes32(uint256(3 days)), "its own window");
+        assertEq(ISlot(open_).hook(), address(0), "and none at all is allowed");
     }
 
     /// @notice The namespace is the slot's manager, so a change goes through it

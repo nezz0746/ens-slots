@@ -75,8 +75,19 @@ export const config = createConfig({
    * trips without this, in series behind React Query, and one with it.
    */
   transports: {
+    // The fork is reached directly: it is on this machine, there is no key to
+    // protect, and a proxy would only add a hop.
     [anvilFork.id]: http(undefined, { batch: true }),
-    [hackathonSepolia.id]: http(undefined, { batch: true }),
+    /**
+     * Sepolia goes through our own route.
+     *
+     * `http(undefined)` means viem's built-in default — a shared public
+     * endpoint, rate limited per IP and shared with everyone else who also
+     * never set one. `/api/rpc` forwards to Alchemy using a key that stays on
+     * the server, because Alchemy puts the key in the URL path and a
+     * browser-side URL would publish it. See the route for the rest.
+     */
+    [hackathonSepolia.id]: http("/api/rpc", { batch: true }),
   },
   batch: { multicall: true },
 

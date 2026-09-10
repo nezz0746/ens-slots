@@ -3,7 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { encodeFunctionData } from "viem";
+import { encodeFunctionData, keccak256, toHex } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
 
 import { AcquireName } from "@/components/acquire-name";
@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { useTx } from "@/hooks/use-tx";
 import {
+  ensRegistryAbi,
   ethRegistrarAbi,
   namespaceFactoryAbi,
   userRegistryAbi,
@@ -31,21 +32,6 @@ const ZERO = "0x0000000000000000000000000000000000000000" as const;
  * longer unit is only ever a multiplier and it should be the same one the rest
  * of the form uses.
  */
-const TENURE_UNITS = {
-  seconds: 1n,
-  minutes: 60n,
-  hours: 3_600n,
-  days: 86_400n,
-  weeks: 604_800n,
-  months: 2_592_000n,
-} as const;
-
-type TenureUnit = keyof typeof TENURE_UNITS;
-
-/** "1 hours" reads like a bug even when the number is right. */
-const plural = (unit: TenureUnit, count: number) =>
-  count === 1 ? unit.slice(0, -1) : unit;
-
 /**
  * Open a namespace under a name you control.
  *
@@ -81,23 +67,6 @@ export default function RegisterPage() {
   const { send, pending, error } = useTx();
 
   const [label, setLabel] = useState("");
-  const [tax, setTax] = useState("5");
-  /**
-   * The tenure every holder is guaranteed.
-   *
-   * A term of the market rather than a per-label option: without it a holder
-   * can be outbid ten minutes after paying, and the name they bought was never
-   * really theirs. It reaches every slot through the namespace's terms, as the minimum
-   * tenure hook's window.
-   *
-   * Hours by default, and every unit from seconds up. A guarantee measured in
-   * days cannot be demonstrated in a sitting — the whole point of the window is
-   * watching somebody fail to outbid inside it, and then succeed once it
-   * lapses. Seconds and minutes are there for exactly that, and months for a
-   * namespace that means it.
-   */
-  const [tenure, setTenure] = useState("24");
-  const [unit, setUnit] = useState<TenureUnit>("hours");
 
   const clean = label.trim().toLowerCase().replace(/\.eth$/, "");
 
@@ -117,10 +86,41 @@ export default function RegisterPage() {
     query: { enabled: clean.length > 0, refetchInterval: 8_000 },
   });
   const needsBuying = available === true;
+
+  /**
+   * Whose name it is, when somebody already has it.
+   *
+   * A namespace answers to whoever holds its parent, so `open` reverts for
+   * anybody else — and used to do so at the wallet, after the gas estimate,
+   * with a bare `ZeroAddress`. The page can ask the same question the factory
+   * asks and answer it before anything is signed.
+   *
+   * Two calls, because `ownerOf` takes a TOKEN ID and a labelhash is not one.
+   * Asking it about `keccak(label)` returns zero for a registered name with no
+   * error at all, which would read here as "nobody owns this".
+   */
+  const labelhash = clean ? (keccak256(toHex(clean)) as `0x${string}`) : undefined;
+  const { data: tokenId } = useReadContract({
+    address: addresses.ensEthRegistry,
+    abi: ensRegistryAbi,
+    functionName: "getTokenId",
+    args: labelhash ? [BigInt(labelhash)] : undefined,
+    query: { enabled: !!labelhash && available === false },
+  });
+  const { data: parentOwner } = useReadContract({
+    address: addresses.ensEthRegistry,
+    abi: ensRegistryAbi,
+    functionName: "ownerOf",
+    args: tokenId !== undefined ? [tokenId] : undefined,
+    query: { enabled: tokenId !== undefined },
+  });
+
+  const owned =
+    !!address &&
+    !!parentOwner &&
+    (parentOwner as string).toLowerCase() === address.toLowerCase();
+  const somebodyElses = available === false && !!parentOwner && !owned;
   const node = clean ? ethNode(clean) : null;
-  const taxBps = BigInt(Math.round(Number(tax || "0") * 100));
-  const tenureCount = Math.max(0, Math.round(Number(tenure || "0")));
-  const tenureSeconds = BigInt(tenureCount) * TENURE_UNITS[unit];
 
   /**
    * Where the factory will put the registry, before it exists.
@@ -168,8 +168,6 @@ export default function RegisterPage() {
           // while every figure on screen was formatted as 6-decimal USDC — and
           // the ERC-20 paths the hold form takes would revert.
           currency,
-          taxBps,
-          minTenureSeconds: tenureSeconds,
           labels: [],
         },
       ],
@@ -213,54 +211,24 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="tax">Tax rate, per 30 days</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              id="tax"
-              value={tax}
-              inputMode="decimal"
-              className="w-24"
-              onChange={(e) => setTax(e.target.value)}
-            />
-            <span className="text-sm text-ink-faint">%</span>
-            <p className="ml-2 text-[11px] leading-tight text-ink-faint">
-              What a holder pays you, continuously, on the price they set. Same
-              rate for every subname — a more valuable one is priced higher by
-              its own holder and pays more at the same rate.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="tenure">Guaranteed run</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              id="tenure"
-              value={tenure}
-              inputMode="numeric"
-              className="w-24"
-              onChange={(e) => setTenure(e.target.value)}
-            />
-            <select
-              aria-label="Unit"
-              value={unit}
-              onChange={(e) => setUnit(e.target.value as TenureUnit)}
-              className="h-9 rounded-lg border border-line bg-surface px-2 text-sm text-ink-soft transition-colors hover:border-brand/50 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
-            >
-              {(Object.keys(TENURE_UNITS) as TenureUnit[]).map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
-            <p className="ml-2 text-[11px] leading-tight text-ink-faint">
-              {tenureCount > 0
-                ? `Nobody can be outbid for ${tenureCount} ${plural(unit, tenureCount)} after taking a space, so what a holder pays for is actually theirs.`
-                : "Anyone can be outbid the moment after they pay. A holder has no guarantee of keeping the name at all."}
-            </p>
-          </div>
-        </div>
+        {/*
+          * Where the tax rate and the guaranteed run used to be.
+          *
+          * They were the namespace's DEFAULTS, and every label silently took
+          * them — while the form that opens labels never offered either, so a
+          * value typed once here governed every name in the namespace forever.
+          * Terms belong to the label, and are asked for where labels are
+          * opened. What is left on this page is the name itself.
+          */}
+        <p className="text-[11px] leading-relaxed text-ink-faint">
+          {somebodyElses
+            ? "That name belongs to somebody else. A namespace answers to whoever holds its parent, so this one would not be yours to run."
+            : owned
+              ? "You hold this name. Opening a namespace lets you put its subnames on the market — each on its own terms, chosen when you open it."
+              : needsBuying
+                ? "Nobody has this name yet. You will register it and open its namespace in one go."
+                : "Type a name you already hold, or one nobody has taken."}
+        </p>
       </Card>
 
       {/* Shown only while the name is actually unregistered. Once it is yours
@@ -286,7 +254,13 @@ export default function RegisterPage() {
           // nobody has registered deploys a registry the `.eth` entry cannot be
           // pointed at, so it succeeds and resolves to nothing — the most
           // expensive way this page could mislead somebody.
-          disabled={!address || !clean || needsBuying || !!pending}
+          // `somebodyElses` matters as much as the rest: `open` derives the
+          // owner from the name, so this reverts for anybody who is not it —
+          // and a live button whose only outcome is a revert is worse than
+          // the message above it is good.
+          disabled={
+            !address || !clean || needsBuying || somebodyElses || !!pending
+          }
           onClick={open}
         >
           {pending === "open" ? (

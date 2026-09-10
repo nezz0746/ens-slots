@@ -204,8 +204,8 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   # name inside the factory; recipient, manager, the hook's address and the
   # escrow floor belong to the contract; and both mutable flags are forced on.
   data=$(cast calldata \
-    "open((address,string,address,uint256,uint64,(string,address,bytes32,uint256,bool)[]))" \
-    "($ZERO,$label.eth,$MOCK_USDC,$TAX_BPS,$MIN_TENURE_RAW,$specs)")
+    "open((address,string,address,(string,uint256,uint64,bool)[]))" \
+    "($ZERO,$label.eth,$MOCK_USDC,$specs)")
   send "$DEPLOYER_PK" "$NSF" "$data"
 
   ns=$(call "$NSF" "namespaceOf(bytes32)(address)" "$node")
@@ -224,16 +224,10 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   echo "$ns"
 }
 
-# A `LabelSpec` tuple. Never permanent; hook and tax both zero, so the label
-# inherits the namespace's minimum tenure and its rate rather than carrying a
-# policy of its own. Either can be overridden per label — `spec_taxed` below
-# does, so the seed has one name that is visibly on its own terms.
-spec() {                     # $1 = label
-  echo "($1,$ZERO,$ZERO32,0,false)"
-}
-
-spec_taxed() {               # $1 = label, $2 = tax in bps
-  echo "($1,$ZERO,$ZERO32,$2,false)"
+# A `LabelSpec` tuple. Every label states its own rate and its own guaranteed
+# run — there are no namespace defaults to inherit. Never permanent.
+spec() {                     # $1 = label, $2 = tax bps, $3 = tenure seconds
+  echo "($1,$2,$3,false)"
 }
 
 node_of() {                  # $1 = namespace, $2 = label
@@ -294,12 +288,18 @@ take() {                     # $1 = namespace, $2 = label, $3 = pk, $4 = who, $5
 # somebody actually wants. Four of them because three could not show a spread
 # and four can.
 #
-# `base` is opened at 10% rather than the namespace's 5%. Tax rate is not a
-# second price — it is how fast a name turns over, and the one name here with
-# obvious demand is the one worth churning faster. The other three inherit.
+# Each on its own terms, because there are no others to fall back on. `base` is
+# taxed at 10% — tax is not a second price, it is how fast a name turns over,
+# and the one name here with obvious demand is worth churning faster. `fun` is
+# the cheap one and carries no guaranteed run at all, which is a real choice
+# rather than an omission: take it and anybody can take it back immediately.
 
 echo "→ l2beat.eth"
-L2BEAT=$(open_namespace l2beat "$(spec_taxed base 1000)" "$(spec rare)" "$(spec cool)" "$(spec fun)")
+L2BEAT=$(open_namespace l2beat \
+  "$(spec base 1000 $MIN_TENURE_RAW)" \
+  "$(spec rare 500 $MIN_TENURE_RAW)" \
+  "$(spec cool 500 $MIN_TENURE_RAW)" \
+  "$(spec fun 250 0)")
 
 # ── what the namespace says about itself ────────────────────────────────────
 #

@@ -224,8 +224,6 @@ abstract contract ForkBase is Test {
                 // Native, so the tests exercise the payout path with the gas
                 // cap on it rather than the easier ERC20 one.
                 currency: IERC20(address(0)),
-                taxBps: TAX_BPS,
-                minTenureSeconds: 0,
                 labels: labels
             })
         );
@@ -235,9 +233,11 @@ abstract contract ForkBase is Test {
         return new SlotNamespaceCuration.LabelSpec[](0);
     }
 
+    /// @dev Terms are per label now, so a spec always states them. `TAX_BPS`
+    ///      is this suite's ordinary rate, not a default the contract knows.
     function _spec(string memory label) internal pure returns (SlotNamespaceCuration.LabelSpec memory) {
         return SlotNamespaceCuration.LabelSpec({
-            label: label, hook: address(0), hookData: bytes32(0), taxBps: 0, permanent: false
+            label: label, taxBps: TAX_BPS, minTenureSeconds: 0, permanent: false
         });
     }
 
@@ -248,15 +248,18 @@ abstract contract ForkBase is Test {
     }
 
     function _slot(string memory label, address hook, bool permanent) internal returns (address slot, uint256 tokenId) {
-        return _slot(label, hook, permanent, 0);
+        return _slot(label, hook, permanent, TAX_BPS);
     }
 
+    /// @dev `hook` survives as an argument only because the existing tests pass
+    ///      it; a non-zero one now means "give this label a guaranteed run",
+    ///      since the namespace owns the only hook address there is.
     function _slot(string memory label, address hook, bool permanent, uint256 taxBps)
         internal
         returns (address slot, uint256 tokenId)
     {
         vm.prank(owner);
-        return namespace.slotLabel(label, hook, bytes32(0), taxBps, permanent);
+        return namespace.slotLabel(label, taxBps, hook == address(0) ? 0 : 1 days, permanent);
     }
 
     /// @dev Buy `slot` for `who` at `price`, funding the protocol's floor.

@@ -155,11 +155,10 @@ contract SlotNamespaceFactory is VersionedUUPS {
         IPermissionedRegistry registry;
         /// @dev The full name, e.g. `l2beat.eth`. Must be second-level `.eth`.
         string parentName;
-        /// @dev What slots here are priced and taxed in.
+        /// @dev What every slot here is priced and taxed in. The one thing a
+        ///      namespace genuinely shares — two currencies under one name
+        ///      would make every figure on a page mean two things.
         IERC20 currency;
-        uint256 taxBps;
-        /// @dev How long a holder cannot be outbid. Zero attaches no hook.
-        uint64 minTenureSeconds;
         SlotNamespaceCuration.LabelSpec[] labels;
     }
 
@@ -228,19 +227,20 @@ contract SlotNamespaceFactory is VersionedUUPS {
      * {SlotNamespace-initialize} for the same reason — a namespace that opened
      * without them could never be given them later.
      *
-     * The hook is this factory's, not the caller's. A duration of zero attaches
-     * none, and the slot rejects a hook without data or data without a hook, so
-     * the two move together.
+     * `taxBps` is zero and `hookData` empty ON PURPOSE. This is not a set of
+     * default terms — there are none. Every label states its own rate and its
+     * own guaranteed run, and `_slotOne` fills both in per label. What survives
+     * here is the currency, the escrow floor, and `hook` carrying the ONE hook
+     * address the namespace is allowed to attach.
      */
     function _termsFor(OpenParams calldata p) internal view returns (SlotInit memory) {
-        bool guaranteed = p.minTenureSeconds > 0;
         return SlotInit({
             recipient: address(this),
             currency: p.currency,
             manager: address(this),
-            hook: guaranteed ? minimumTenureHook : address(0),
-            hookData: guaranteed ? bytes32(uint256(p.minTenureSeconds)) : bytes32(0),
-            taxBps: p.taxBps,
+            hook: minimumTenureHook,
+            hookData: bytes32(0),
+            taxBps: 0,
             minDepositSeconds: MIN_DEPOSIT_SECONDS,
             mutableTax: true,
             mutableHook: true
