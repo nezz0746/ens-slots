@@ -39,10 +39,42 @@ const urbanist = Urbanist({
  * localhost default is what makes the cards visible while developing, which is
  * the only time anybody looks at them by hand.
  */
-export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-  ),
+export async function generateMetadata(): Promise<Metadata> {
+  return { ...metadata, metadataBase: await siteUrl() };
+}
+
+/**
+ * The origin this page is actually being served from.
+ *
+ * ── Why it is read and not configured ───────────────────────────────────────
+ *
+ * `opengraph-image` emits a RELATIVE path unless Next knows the origin, so
+ * `metadataBase` decides whether a crawler can fetch the card at all. It was
+ * an env var with a localhost default, the env var was not set on the
+ * deployment, and the live site served
+ * `og:image = http://localhost:3000/opengraph-image` — a URL that resolves, for
+ * every reader, to their own machine.
+ *
+ * A default that is wrong everywhere except the one place nobody shares links
+ * from is not a default. The request knows its own host; ask it. The env var
+ * still wins where it is set, for a deployment behind a proxy that rewrites
+ * the host into something it should not advertise.
+ */
+async function siteUrl(): Promise<URL> {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) return new URL(configured);
+
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (!host) return new URL("http://localhost:3000");
+
+  // Traefik terminates TLS and forwards plain HTTP, so the scheme has to come
+  // from the header rather than from what this process can see.
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return new URL(`${proto}://${host}`);
+}
+
+const metadata: Metadata = {
   title: {
     default: "Nameslots",
     template: "%s · Nameslots",
