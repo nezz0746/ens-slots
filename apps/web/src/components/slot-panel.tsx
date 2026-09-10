@@ -13,7 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, useReadContract } from "wagmi";
 
 import { RunwayChoice } from "@/components/runway-choice";
-import { Status } from "@/components/market-figures";
+import { MarketFigures } from "@/components/market-figures";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/input";
 import { ValuationInput } from "@/components/valuation-input";
@@ -81,17 +81,16 @@ export function SlotPanel({
   return (
     <div>
       {/*
-        * The figures moved out to sit under the name; see {MarketFigures}.
-        * What is left is the controls, so the heading names the act rather
-        * than the subject — "The market" over a form was labelling the topic
-        * of the page, not the thing in the box.
+        * Headed by what the name COSTS, not by what you are about to do.
+        *
+        * It said "Take it from them" over a form whose own button already says
+        * that, next to a badge about the position's funding rather than about
+        * the act — a heading naming the verb and a badge naming the subject.
+        * The figures underneath are current state; the rows further down are a
+        * quote for the transaction being composed, which is why both belong
+        * here and neither repeats the other.
         */}
-      <header className="flex items-center justify-between gap-3 border-b border-line px-4 pt-4 pb-3">
-        <h2 className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
-          {isVacant ? "Take it" : isOccupant ? "Your position" : "Take it from them"}
-        </h2>
-        <Status subname={subname} />
-      </header>
+      <MarketFigures subname={subname} compact />
 
       <div className="space-y-4 px-4 py-4">
         {isVacant ? (

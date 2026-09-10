@@ -12,7 +12,6 @@ import {
 } from "react";
 import { useAccount } from "wagmi";
 
-import { MarketFigures } from "@/components/market-figures";
 import { TermsEditor } from "@/components/terms-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,8 +72,6 @@ export function NameDetails({
           )}
         </p>
       </header>
-
-      <MarketFigures subname={subname} />
 
       <Records
         name={name}

@@ -27,7 +27,14 @@ import { cn } from "@/lib/utils";
  *
  * Facts here, under the name. Controls stay on the right.
  */
-export function MarketFigures({ subname }: { subname: Subname }) {
+export function MarketFigures({
+  subname,
+  compact,
+}: {
+  subname: Subname;
+  /** Inside the action panel's own card, so it brings no card of its own. */
+  compact?: boolean;
+}) {
   const addresses = useAddresses();
   const state = subname.state;
   if (!state) return null;
@@ -35,14 +42,19 @@ export function MarketFigures({ subname }: { subname: Subname }) {
   const tenure = tenureSecondsOf(state, addresses.minimumTenureHook);
 
   return (
-    <section className="space-y-2">
+    <section
+      className={cn(
+        "space-y-2",
+        compact && "border-b border-line px-4 pt-4 pb-3",
+      )}
+    >
       <header className="flex items-center justify-between gap-3">
         <h3 className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
           The market
         </h3>
         <Status subname={subname} />
       </header>
-      <Figures state={state} tenure={tenure} />
+      <Figures state={state} tenure={tenure} compact={compact} />
       <PendingTerms state={state} minimumTenureHook={addresses.minimumTenureHook} />
     </section>
   );
@@ -132,9 +144,11 @@ export function Status({ subname }: { subname: Subname }) {
 function Figures({
   state,
   tenure,
+  compact,
 }: {
   state: NonNullable<Subname["state"]>;
   tenure: bigint | null;
+  compact?: boolean;
 }) {
   // The slot's own answer, not `runwaySeconds` on the deposit. They differ:
   // this one accounts for tax accrued since the last settlement, so it is the
@@ -147,21 +161,33 @@ function Figures({
   return (
     <dl
       className={cn(
-        "grid divide-x divide-line overflow-hidden rounded-xl border border-line bg-canvas/50",
-        tenure ? "grid-cols-4" : "grid-cols-3",
+        "grid",
+        // Compact drops the card and the dividers: it sits inside the action
+        // panel's own card, and a bordered box inside a bordered box is two
+        // frames around one row.
+        // Two columns compact, not four: this panel is 380px and four figures
+        // across it truncated every value to an ellipsis, which is a figure
+        // that cannot be read at all. Two rows of two fit whole.
+        compact
+          ? "grid-cols-2 gap-x-4 gap-y-2"
+          : cn(
+              "divide-x divide-line overflow-hidden rounded-xl border border-line bg-canvas/50",
+              tenure ? "grid-cols-4" : "grid-cols-3",
+            ),
       )}
     >
-      <Figure label="Valuation" value={formatAmount(state.price)} />
-      <Figure label="Rent" value={`${formatAmount(perMonth)}/mo`} />
+      <Figure label="Valuation" value={formatAmount(state.price)} compact={compact} />
+      <Figure label="Rent" value={`${formatAmount(perMonth)}/mo`} compact={compact} />
       <Figure
         label="Runway"
         value={state.isVacant ? "—" : describeDays(runway)}
         className={state.isVacant ? undefined : TONE_TEXT[tone]}
+        compact={compact}
       />
       {/* What a buyer is actually guaranteed. It was set once when the
           namespace opened and then shown nowhere at all, which made it a
           promise nobody could read. */}
-      {tenure && <Figure label="Guaranteed" value={describeDays(tenure)} />}
+      {tenure && <Figure label="Guaranteed" value={describeDays(tenure)} compact={compact} />}
     </dl>
   );
 }
@@ -170,13 +196,15 @@ function Figure({
   label,
   value,
   className,
+  compact,
 }: {
   label: string;
   value: string;
   className?: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="min-w-0 px-3 py-2.5">
+    <div className={cn("min-w-0", compact ? "" : "px-3 py-2.5")}>
       <dt className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
         {label}
       </dt>
