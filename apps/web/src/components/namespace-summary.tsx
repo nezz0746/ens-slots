@@ -6,6 +6,7 @@ import { formatUnits } from "viem";
 import { useAccount } from "wagmi";
 
 import { DECIMALS, isDollarPegged, SYMBOL } from "@/lib/currency";
+import { shortAddress } from "@/lib/format";
 
 import { Button } from "@/components/ui/button";
 import { useCollectAll } from "@/hooks/use-collect-all";
@@ -52,10 +53,14 @@ export function NamespaceSummary({
   const price = useTokenPrice();
   const showUsd = !isDollarPegged();
   const { collectAll, batched, busy, error } = useCollectAll();
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const treasury = useNamespaceBalance(namespace.address);
 
   const held = namespace.subnames.filter((s) => s.state && !s.state.isVacant);
+  // Only occupied slots earn. A vacant one is inventory, not income.
+  const earning = held;
+  const isOwner =
+    !!address && namespace.owner.toLowerCase() === address.toLowerCase();
 
   // The namespace's DEFAULT rate, and only that.
   //
@@ -95,16 +100,35 @@ export function NamespaceSummary({
   return (
     <div className="rounded-[--radius-card] border border-line bg-surface">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5">
-        <Stat
-          label="Held at"
-          value={`${trim(namespace.totalValue)} ${SYMBOL}`}
-          sub={showUsd ? formatUsd(usdOf(namespace.totalValue, price)) : null}
-        />
-        <Stat
-          label="Revenue"
-          value={`${trim(monthly)} ${SYMBOL}/mo`}
-          sub={showUsd ? formatUsd(usdOf(monthly, price)) : null}
-        />
+        {/*
+          * The namespace as a sentence rather than two labelled figures.
+          *
+          * "Held at" was the sum of what the holders say their names are
+          * worth, which is a number about THEM. What an owner is here for is
+          * what it earns and where it goes — and the third of those was
+          * nowhere on the page at all, even though it is now derived from the
+          * parent name rather than chosen, and so is the one thing about this
+          * namespace most worth stating out loud.
+          */}
+        <p className="text-sm text-ink-soft">
+          <span className="font-semibold tabular-nums text-ink">
+            {earning.length}
+          </span>{" "}
+          {earning.length === 1 ? "slot" : "slots"} earning{" "}
+          <span className="font-semibold tabular-nums text-ink">
+            {trim(monthly)} {SYMBOL}/mo
+          </span>
+          {showUsd && formatUsd(usdOf(monthly, price)) ? (
+            <span className="text-ink-faint">
+              {" "}
+              ({formatUsd(usdOf(monthly, price))})
+            </span>
+          ) : null}{" "}
+          to{" "}
+          <span className="font-medium text-ink">
+            {isOwner ? "you" : shortAddress(namespace.owner)}
+          </span>
+        </p>
         {taxBps !== undefined && (
           <Stat label="Default tax" value={`${Number(taxBps) / 100}% / 30d`} />
         )}
