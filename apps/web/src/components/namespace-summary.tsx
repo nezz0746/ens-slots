@@ -56,6 +56,27 @@ export function NamespaceSummary({
   const { address, isConnected } = useAccount();
   const treasury = useNamespaceBalance(namespace.address);
 
+  /**
+   * Collect, then send it on, from one press.
+   *
+   * Tax is paid to the namespace rather than to a person — that is what keeps
+   * the income attached to the parent name instead of to whoever opened it —
+   * so collecting moves money out of the slots and stops there. Left as two
+   * buttons, pressing the first made a second one appear, which reads as the
+   * first having half-worked rather than as a second leg of the same trip.
+   *
+   * Two transactions unless the wallet batches, and that is fine: they are
+   * sequential either way, and `useTx` queues writes so the second cannot race
+   * the first for a nonce.
+   *
+   * The standalone Withdraw stays for the balance somebody ELSE's collect left
+   * here, which this button would never see.
+   */
+  async function collectAndWithdraw() {
+    const ok = await collectAll(collectable);
+    if (ok) await treasury.withdraw();
+  }
+
   const held = namespace.subnames.filter((s) => s.state && !s.state.isVacant);
   // Only occupied slots earn. A vacant one is inventory, not income.
   const earning = held;
@@ -171,8 +192,10 @@ export function NamespaceSummary({
             // Disabled without a wallet, rather than failing on click. The
             // button used to invite a press it could never honour, and answered
             // with a line of wagmi's internals under the card.
-            disabled={busy || !isConnected || collectable.length === 0}
-            onClick={() => collectAll(collectable)}
+            disabled={
+              busy || treasury.withdrawing || !isConnected || collectable.length === 0
+            }
+            onClick={collectAndWithdraw}
             title={
               !isConnected
                 ? "Connect a wallet to collect"
@@ -183,8 +206,16 @@ export function NamespaceSummary({
                     : "One transaction per slot — the factory on this chain predates collectAll"
             }
           >
-            {busy ? <Loader2 className="animate-spin" /> : <HandCoins />}
-            {busy ? "Collecting…" : "Collect all"}
+            {busy || treasury.withdrawing ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <HandCoins />
+            )}
+            {busy
+              ? "Collecting…"
+              : treasury.withdrawing
+                ? "Sending…"
+                : "Collect all"}
           </Button>
         </div>
       </div>
