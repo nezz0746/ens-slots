@@ -2,7 +2,6 @@
 
 import {
   ArrowRight,
-  Coins,
   Gavel,
   Loader2,
   LogOut,
@@ -14,7 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, useReadContract } from "wagmi";
 
 import { RunwayChoice } from "@/components/runway-choice";
-import { Badge } from "@/components/ui/badge";
+import { MarketFigures } from "@/components/market-figures";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/input";
 import { ValuationInput } from "@/components/valuation-input";
@@ -39,7 +38,6 @@ import {
   rentFor,
   runwaySeconds,
   runwayTone,
-  TONE_LABEL,
   TONE_TEXT,
 } from "@/lib/runway";
 import { cn } from "@/lib/utils";
@@ -82,14 +80,17 @@ export function SlotPanel({
 
   return (
     <div>
-      <header className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
-        <h2 className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
-          The market
-        </h2>
-        <Status subname={subname} />
-      </header>
-
-      {state && <Figures state={state} />}
+      {/*
+        * Headed by what the name COSTS, not by what you are about to do.
+        *
+        * It said "Take it from them" over a form whose own button already says
+        * that, next to a badge about the position's funding rather than about
+        * the act — a heading naming the verb and a badge naming the subject.
+        * The figures underneath are current state; the rows further down are a
+        * quote for the transaction being composed, which is why both belong
+        * here and neither repeats the other.
+        */}
+      <MarketFigures subname={subname} compact />
 
       <div className="space-y-4 px-4 py-4">
         {isVacant ? (
@@ -129,79 +130,6 @@ export function SlotPanel({
   );
 }
 
-function Status({ subname }: { subname: Subname }) {
-  const s = subname.state;
-  if (!s) return null;
-  if (s.isVacant) return <Badge tone="brand">Available</Badge>;
-  if (s.isInsolvent) return <Badge tone="bad">Liquidatable</Badge>;
-  const tone = runwayTone(s.secondsUntilLiquidation, s.minDepositSeconds);
-  return (
-    <Badge tone={tone === "safe" ? "good" : "warn"}>{TONE_LABEL[tone]}</Badge>
-  );
-}
-
-/**
- * The three numbers the decision turns on, edge to edge.
- *
- * Valuation, what holding it costs per month, and how long the escrow lasts —
- * three because they are the whole trade in order: what you say it is worth,
- * what saying that costs you, how long you have paid for.
- *
- * Escrow and rate used to sit here too and were the wrong kind of true. The
- * rate is a constant of the namespace, the same on every row; and the escrow
- * only means anything divided by the rent, which is the runway. Four figures
- * where two were derivable made the row longer and the decision no clearer.
- *
- * Full-bleed with dividers rather than a padded box. Three figures in a box
- * inside a card is two frames around one row.
- */
-function Figures({ state }: { state: NonNullable<Subname["state"]> }) {
-  // The slot's own answer, not `runwaySeconds` on the deposit. They differ:
-  // this one accounts for tax accrued since the last settlement, so it is the
-  // number that decides an actual liquidation. Computing it here as well would
-  // give the badge and the figure two sources for one fact.
-  const runway = state.isVacant ? 0n : state.secondsUntilLiquidation;
-  const tone = runwayTone(runway, state.minDepositSeconds);
-  const perMonth = rentFor(MONTH_SECONDS, state.price, state.taxBps);
-
-  return (
-    <dl className="grid grid-cols-3 divide-x divide-line border-y border-line bg-canvas/50">
-      <Figure label="Valuation" value={formatAmount(state.price)} />
-      <Figure label="Rent" value={`${formatAmount(perMonth)}/mo`} />
-      <Figure
-        label="Runway"
-        value={state.isVacant ? "—" : describeDays(runway)}
-        className={state.isVacant ? undefined : TONE_TEXT[tone]}
-      />
-    </dl>
-  );
-}
-
-function Figure({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: string;
-  className?: string;
-}) {
-  return (
-    <div className="min-w-0 px-3 py-2.5">
-      <dt className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
-        {label}
-      </dt>
-      <dd
-        className={cn(
-          "mt-0.5 truncate text-sm font-semibold tabular-nums",
-          className,
-        )}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
 
 /**
  * Buying, whether from nobody or from somebody.
@@ -824,46 +752,30 @@ function Communal({
 }) {
   const s = subname.state;
   if (!s) return null;
+  // Liquidation only. Collecting one slot used to sit here too, beside a
+  // "Collect all" in the header that does the same thing for every slot at
+  // once — two buttons for one act, and the per-slot one paid the namespace
+  // rather than anybody looking at it, which made it the more confusing half.
   const canLiquidate = s.isInsolvent && !s.isVacant;
-  const canCollect = s.taxOwed > 0n;
-  if (!canLiquidate && !canCollect) return null;
+  if (!canLiquidate) return null;
 
   return (
     <div className="flex gap-2 border-t border-line px-4 py-3">
-      {canLiquidate && (
-        <Button
-          variant="danger"
-          size="sm"
-          disabled={!!pending}
-          onClick={() =>
-            send("liquidate", {
-              address: subname.slot,
-              abi: slotAbi,
-              functionName: "liquidate",
-            })
-          }
-        >
-          <Gavel />
-          Liquidate
-        </Button>
-      )}
-      {canCollect && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!!pending}
-          onClick={() =>
-            send("collect", {
-              address: subname.slot,
-              abi: slotAbi,
-              functionName: "collect",
-            })
-          }
-        >
-          <Coins />
-          Collect {formatAmount(s.taxOwed)}
-        </Button>
-      )}
+      <Button
+        variant="danger"
+        size="sm"
+        disabled={!!pending}
+        onClick={() =>
+          send("liquidate", {
+            address: subname.slot,
+            abi: slotAbi,
+            functionName: "liquidate",
+          })
+        }
+      >
+        <Gavel />
+        Liquidate
+      </Button>
     </div>
   );
 }

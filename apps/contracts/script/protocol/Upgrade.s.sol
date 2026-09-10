@@ -67,13 +67,13 @@ contract Upgrade is Config {
         console2.log("done. versions now:");
         console2.log("  factory  ", factory.version());
         console2.log("  resolver ", resolver.version());
-        console2.log("  namespace", SlotNamespace(factory.implementation()).version());
+        console2.log("  namespace", SlotNamespace(payable(factory.implementation())).version());
     }
 
     // ─── the beacon: every namespace at once ────────────────────────────────
 
     function _namespace(SlotNamespaceFactory factory) internal {
-        uint64 live = SlotNamespace(factory.implementation()).version();
+        uint64 live = SlotNamespace(payable(factory.implementation())).version();
         uint64 next = new SlotNamespace().version();
 
         if (next <= live) {
@@ -128,7 +128,7 @@ contract Upgrade is Config {
     function _witness(SlotNamespaceFactory factory) internal view returns (bytes32, bool) {
         if (factory.count() == 0) return (bytes32(0), false);
 
-        SlotNamespace ns = SlotNamespace(factory.at(0));
+        SlotNamespace ns = SlotNamespace(payable(factory.at(0)));
         (bytes32[] memory nodes, string[] memory labels, address[] memory slots) = ns.listing();
 
         return (

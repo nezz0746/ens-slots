@@ -9,7 +9,7 @@ import { shortAddress } from "@/lib/format";
 
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;
-export const alt = "A namespace on ENS Slots";
+export const alt = "A namespace on Nameslots";
 
 /**
  * The card for one namespace, drawn from what the namespace actually says.
@@ -17,8 +17,8 @@ export const alt = "A namespace on ENS Slots";
  * ── Why this one reads a chain and the other two do not ───────────────────
  *
  * The front page's card is about the protocol, which does not change. This one
- * is about `l2beat.eth` specifically, and a card that said "A namespace on ENS
- * Slots" over an address would be worth less than the URL it was attached to.
+ * is about `l2beat.eth` specifically, and a card that said "A namespace on
+ * Nameslots" over an address would be worth less than the URL it carried.
  * The name, how many subnames are open and what they are collectively held at
  * are the three things somebody deciding whether to click actually wants.
  *
@@ -51,8 +51,8 @@ export default async function Image({
         title={summary?.parentName ?? shortAddress(namespace)}
         subtitle={
           summary
-            ? "Every subname here is rented. The holder sets the price, pays tax on it, and can be taken out by anyone willing to pay it."
-            : "A namespace of rentable ENS subnames — self-priced, and always for sale."
+            ? "Every subname here is taxed. The holder sets what it is worth, pays tax on that number, and gives it up to anyone willing to pay it."
+            : "A namespace of taxable subnames — self-priced, and always for sale."
         }
         facts={
           summary

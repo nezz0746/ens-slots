@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {console2} from "forge-std/console2.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
+import {IPermissionedRegistry} from "../../src/interfaces/IENSv2.sol";
 import {SepoliaAddresses} from "../../src/Addresses.sol";
 import {SlotNamespace} from "../../src/SlotNamespace.sol";
 import {SlotNamespaceFactory} from "../../src/SlotNamespaceFactory.sol";
@@ -82,7 +83,9 @@ contract Deploy is Config {
                             address(namespaceImpl),
                             ISlotFactory(SepoliaAddresses.SLOT_FACTORY),
                             IVerifiableFactory(SepoliaAddresses.ENS_VERIFIABLE_FACTORY),
-                            SepoliaAddresses.ENS_USER_REGISTRY_IMPL
+                            SepoliaAddresses.ENS_USER_REGISTRY_IMPL,
+                            IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY),
+                            SepoliaAddresses.MINIMUM_TENURE_HOOK
                         )
                     )
                 )

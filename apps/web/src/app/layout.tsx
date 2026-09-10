@@ -44,20 +44,20 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   ),
   title: {
-    default: "ENS Slots",
-    template: "%s · ENS Slots",
+    default: "Nameslots",
+    template: "%s · Nameslots",
   },
   description:
-    "Rentable ENS subnames. The holder sets the price, pays tax on it continuously, and can be taken out by anyone willing to pay it.",
+    "Taxable subnames. The holder sets what a name is worth, pays tax on that number continuously, and gives it up to anyone willing to pay it.",
   // An independent project. It wears ENS's colours; the name and the symbol
   // are its own, and no ENS mark appears anywhere in it.
-  applicationName: "ENS Slots",
+  applicationName: "Nameslots",
   openGraph: {
     type: "website",
-    siteName: "ENS Slots",
-    title: "ENS Slots",
+    siteName: "Nameslots",
+    title: "Nameslots",
     description:
-      "Rentable ENS subnames. The holder sets the price, pays tax on it continuously, and can be taken out by anyone willing to pay it.",
+      "Taxable subnames. The holder sets what a name is worth, pays tax on that number continuously, and gives it up to anyone willing to pay it.",
   },
   twitter: { card: "summary_large_image" },
 };

@@ -10,6 +10,8 @@
 #   pnpm protocol upgrade                 send it
 #   pnpm protocol layout                  storage layout vs the snapshot
 #   pnpm protocol layout --accept         adopt the current layout
+#   pnpm protocol addresses               0xSlots constants vs the package
+#   pnpm protocol addresses --accept      adopt the package's
 #
 # ── Why the layout check runs before every upgrade ──────────────────────────
 #
@@ -101,6 +103,10 @@ run_script() {                # $1 = contract name in script/protocol
 }
 
 case "$CMD" in
+  addresses)
+    "$ROOT/scripts/slots-addresses.mjs" "$([ -n "${ACCEPT:-}" ] && echo write || echo check)"
+    ;;
+
   layout)
     cd "$CONTRACTS"
     forge build --skip test >/dev/null
@@ -113,6 +119,10 @@ case "$CMD" in
     ;;
 
   deploy)
+    # The 0xSlots addresses are somebody else's deployment and drifted once
+    # already, unnoticed, because nothing failed when they did. Checked here
+    # for the same reason the layout is: this is the last moment it is free.
+    "$ROOT/scripts/slots-addresses.mjs" check
     cd "$CONTRACTS"
     forge build --skip test >/dev/null
     # Adopted rather than checked. There is nothing live to break yet, and a
@@ -124,6 +134,7 @@ case "$CMD" in
     ;;
 
   upgrade)
+    "$ROOT/scripts/slots-addresses.mjs" check
     cd "$CONTRACTS"
     forge build --skip test >/dev/null
     ./script/layout.py check

@@ -78,9 +78,21 @@
     "type": "mapping(string => string)"
   },
   {
-    "label": "__gap",
+    "label": "ethRegistry",
     "slot": 20,
     "offset": 0,
-    "type": "uint256[51]"
+    "type": "contract IPermissionedRegistry"
+  },
+  {
+    "label": "parentLabelhash",
+    "slot": 21,
+    "offset": 0,
+    "type": "bytes32"
+  },
+  {
+    "label": "__gap",
+    "slot": 22,
+    "offset": 0,
+    "type": "uint256[49]"
   }
 ]

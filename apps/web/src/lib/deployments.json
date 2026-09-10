@@ -6,14 +6,14 @@
     "ensEthRegistrar": "0x7d1B7f586a62Ac3F54b9A396849757814283270b",
     "ensUniversalResolver": "0xd26f2040D083Af1cD2962ba303F4BEa0c4faf142",
     "mockUsdc": "0xcBFD80F74375c54E545AF34788Ff465F96F66F05",
-    "slotFactory": "0x14df7d78ef556A80F0AD3ede3F10F1e24f92E1cE",
-    "minimumTenureHook": "0xB1e68532Ba467b2310A931abcDD682E718426c9C"
+    "slotFactory": "0x4416f23E3d8de4E35937448FD221549b6E38483B",
+    "minimumTenureHook": "0x32dc981b9622B8ae5e90716ED07a275cCAd1Ba9F"
   },
   "chains": {
     "11155111": {
       "chainId": 11155111,
-      "namespaceFactory": "0xa91A7C2A745f66C9accE6c46a3eA39F525b059Da",
-      "namespaceResolver": "0xE322cDADB8fd511788F0fA25BffD794b7A946125"
+      "namespaceFactory": "0xEC9EA12Ba659E840eF6469eEA95c113De3Fdf319",
+      "namespaceResolver": "0x7D5D8db0c3ecaD7BD2115460fEDC37E2329a5E76"
     },
     "31337": {
       "chainId": 31337,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
@@ -41,6 +42,33 @@ contract SlotNamespaceFactory is VersionedUUPS {
     IVerifiableFactory public verifiableFactory;
     address public userRegistryImpl;
 
+    /// @dev namehash("eth"). Every parent here is a second-level `.eth` name.
+    bytes32 internal constant ETH_NODE = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+
+    /**
+     * @dev The floor on how long a position must be funded for.
+     *
+     * Fixed rather than chosen: it is a protocol-shaped number, not a market
+     * one, and the app hardcoded the same week into every namespace it opened.
+     * A caller-chosen value would have been a fourth thing to get wrong for no
+     * gain anybody asked for.
+     */
+    uint256 internal constant MIN_DEPOSIT_SECONDS = 7 days;
+
+    /// @notice The canonical minimum-tenure hook, attached to every namespace
+    ///         that asks for a guaranteed run.
+    /// @dev Configured, not passed. A caller who could name the hook could name
+    ///      one that vetoes every buy, or one that simply is not this — and the
+    ///      app naming it from a generated address book is how it silently
+    ///      attached an older deployment for weeks.
+    address public minimumTenureHook;
+
+    /// @notice The `.eth` registry every namespace derives its owner from.
+    /// @dev Configured here rather than passed to {open}: a caller who could
+    ///      name the registry could name one whose `ownerOf` answers whatever
+    ///      they like, which is the whole of a namespace's access control.
+    IPermissionedRegistry public ethRegistry;
+
     /// @notice The resolver every namespace opened here starts on. Behind its
     ///         own proxy, so ENS records it once and never repoint it.
     address public resolver;
@@ -54,6 +82,7 @@ contract SlotNamespaceFactory is VersionedUUPS {
     // forge-lint: disable-next-line(mixed-case-variable)
     uint256[43] private __gap;
 
+    error NotASecondLevelEthName();
     error AlreadyOpened(bytes32 parentNode, address namespace);
     error NotAdmin(address caller);
     error ZeroAddress();
@@ -86,11 +115,16 @@ contract SlotNamespaceFactory is VersionedUUPS {
         address namespaceImpl,
         ISlotFactory slotFactory_,
         IVerifiableFactory verifiableFactory_,
-        address userRegistryImpl_
+        address userRegistryImpl_,
+        IPermissionedRegistry ethRegistry_,
+        address minimumTenureHook_
     ) external initializer {
         if (admin_ == address(0)) revert ZeroAddress();
+        if (address(ethRegistry_) == address(0)) revert ZeroAddress();
 
         admin = admin_;
+        ethRegistry = ethRegistry_;
+        minimumTenureHook = minimumTenureHook_;
         slotFactory = slotFactory_;
         verifiableFactory = verifiableFactory_;
         userRegistryImpl = userRegistryImpl_;
@@ -103,12 +137,29 @@ contract SlotNamespaceFactory is VersionedUUPS {
     /// @notice `registry` may be ZERO to have this factory deploy one, which is
     ///         the only way to grant the namespace its roles in the same
     ///         transaction. `labels` may be empty.
+    /**
+     * @notice What opening a namespace actually needs.
+     *
+     * @dev Three choices and a name. It used to be a whole `SlotInit`, of which
+     *      four fields were overwritten before they reached a slot — recipient
+     *      and manager become this namespace, and both mutable flags are forced
+     *      on — one was an address the caller had no business choosing, and one
+     *      the app hardcoded. A struct where a third of the fields are ignored
+     *      teaches the reader that the values do not matter, which is exactly
+     *      the wrong lesson about the ones that do.
+     *
+     *      `parentNode` and `parentLabelhash` are gone too: both are derived
+     *      from `parentName`, so they cannot disagree with it.
+     */
     struct OpenParams {
         IPermissionedRegistry registry;
-        bytes32 parentNode;
+        /// @dev The full name, e.g. `l2beat.eth`. Must be second-level `.eth`.
         string parentName;
-        SlotInit terms;
-        address owner;
+        /// @dev What slots here are priced and taxed in.
+        IERC20 currency;
+        uint256 taxBps;
+        /// @dev How long a holder cannot be outbid. Zero attaches no hook.
+        uint64 minTenureSeconds;
         SlotNamespaceCuration.LabelSpec[] labels;
     }
 
@@ -122,9 +173,20 @@ contract SlotNamespaceFactory is VersionedUUPS {
      *      the roles themselves.
      */
     function open(OpenParams calldata p) external returns (address namespace, address registry) {
-        address existing = namespaceOf[p.parentNode];
-        if (existing != address(0)) revert AlreadyOpened(p.parentNode, existing);
-        if (p.owner == address(0)) revert ZeroAddress();
+        // Derived, not passed. `namehash("<label>.eth")` is
+        // `keccak(ETH_NODE, keccak(label))`, so one string gives both — and two
+        // values that come from one source cannot contradict each other.
+        bytes32 parentLabelhash = keccak256(bytes(_labelOf(p.parentName)));
+        bytes32 parentNode = keccak256(abi.encodePacked(ETH_NODE, parentLabelhash));
+
+        address existing = namespaceOf[parentNode];
+        if (existing != address(0)) revert AlreadyOpened(parentNode, existing);
+
+        // No owner argument. A namespace answers to whoever holds its parent
+        // name, so there is nothing here to choose — and opening one for a name
+        // you do not own now hands it to the person who does.
+        address owner = ethRegistry.ownerOf(ethRegistry.getTokenId(uint256(parentLabelhash)));
+        if (owner == address(0)) revert ZeroAddress();
 
         // Empty init data: the address must exist before the registry that
         // grants it roles. Initialized at the end of this same call.
@@ -132,28 +194,81 @@ contract SlotNamespaceFactory is VersionedUUPS {
 
         registry = address(p.registry);
         if (registry == address(0)) {
-            registry = _deployRegistry(p.parentNode, namespace, p.owner);
+            registry = _deployRegistry(parentNode, namespace, owner);
         }
 
         // Before initialize, so a label opened there already resolves here.
         _namespaces.push(namespace);
-        namespaceOf[p.parentNode] = namespace;
+        namespaceOf[parentNode] = namespace;
 
-        SlotNamespace(namespace)
+        SlotNamespace(payable(namespace))
             .initialize(
                 SlotNamespace.InitParams({
                     registry_: IPermissionedRegistry(registry),
                     slotFactory_: slotFactory,
-                    parentNode_: p.parentNode,
+                    parentNode_: parentNode,
                     parentName_: p.parentName,
                     resolver_: resolver,
-                    terms_: p.terms,
-                    owner_: p.owner,
+                    terms_: _termsFor(p),
+                    ethRegistry_: ethRegistry,
+                    parentLabelhash_: parentLabelhash,
                     labels: p.labels
                 })
             );
 
-        emit NamespaceOpened(namespace, registry, p.parentNode, p.parentName, p.owner);
+        emit NamespaceOpened(namespace, registry, parentNode, p.parentName, owner);
+    }
+
+    /**
+     * @dev The whole `SlotInit`, from three choices.
+     *
+     * Recipient and manager are placeholders: {SlotNamespaceCuration-_slotOne}
+     * replaces both with the namespace, which is what keeps control and income
+     * attached to the parent name. Both mutable flags are forced on by
+     * {SlotNamespace-initialize} for the same reason — a namespace that opened
+     * without them could never be given them later.
+     *
+     * The hook is this factory's, not the caller's. A duration of zero attaches
+     * none, and the slot rejects a hook without data or data without a hook, so
+     * the two move together.
+     */
+    function _termsFor(OpenParams calldata p) internal view returns (SlotInit memory) {
+        bool guaranteed = p.minTenureSeconds > 0;
+        return SlotInit({
+            recipient: address(this),
+            currency: p.currency,
+            manager: address(this),
+            hook: guaranteed ? minimumTenureHook : address(0),
+            hookData: guaranteed ? bytes32(uint256(p.minTenureSeconds)) : bytes32(0),
+            taxBps: p.taxBps,
+            minDepositSeconds: MIN_DEPOSIT_SECONDS,
+            mutableTax: true,
+            mutableHook: true
+        });
+    }
+
+    /**
+     * @dev The label of a `<label>.eth` name, and a check that it is one.
+     *
+     * Everything here assumes a second-level `.eth` parent — the node
+     * derivation above is only correct for one. That assumption used to be
+     * enforced by comparing two values the caller passed; deriving them makes
+     * it structural, and this is where it is stated.
+     */
+    function _labelOf(string calldata name) internal pure returns (string memory) {
+        bytes calldata b = bytes(name);
+        uint256 dot = b.length;
+        for (uint256 i; i < b.length; ++i) {
+            if (b[i] == ".") {
+                dot = i;
+                break;
+            }
+        }
+        if (dot == 0 || b.length != dot + 4) revert NotASecondLevelEthName();
+        if (b[dot + 1] != "e" || b[dot + 2] != "t" || b[dot + 3] != "h") {
+            revert NotASecondLevelEthName();
+        }
+        return string(b[:dot]);
     }
 
     /// @dev The namespace gets exactly what it uses — never `ROLE_RENEW`, as

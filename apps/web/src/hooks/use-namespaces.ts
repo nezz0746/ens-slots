@@ -43,6 +43,15 @@ export interface SlotState {
   collectedTax: bigint;
   recipient: `0x${string}`;
   hook: `0x${string}`;
+  /** The hook's configuration word. For the minimum-tenure hook, seconds. */
+  hookData: `0x${string}`;
+  /** A queued change of terms, if the owner has proposed one. */
+  pendingTaxBps: bigint;
+  pendingHook: `0x${string}`;
+  pendingHookData: `0x${string}`;
+  pendingHasTax: boolean;
+  pendingHasHook: boolean;
+  hasRipeTerms: boolean;
 }
 
 export interface Subname {
@@ -89,6 +98,13 @@ function toState(info: any): SlotState {
     collectedTax: info.collectedTax,
     recipient: info.recipient,
     hook: info.hook,
+    hookData: info.hookData,
+    pendingTaxBps: info.pendingTaxBps,
+    pendingHook: info.pendingHook,
+    pendingHookData: info.pendingHookData,
+    pendingHasTax: info.pendingHasTax,
+    pendingHasHook: info.pendingHasHook,
+    hasRipeTerms: info.hasRipeTerms,
   };
 }
 

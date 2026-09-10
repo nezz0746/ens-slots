@@ -69,10 +69,12 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
       args: [
         queue.map((label) => ({
           label,
-          // Zero means "use the namespace's hook" — the minimum tenure set when
-          // it was opened. See {SlotNamespaceCuration-_slotOne}.
+          // Zero means "use the namespace's" for both — the hook carries the
+          // minimum tenure set when the namespace opened, and the rate is its
+          // own. See {SlotNamespaceCuration-_slotOne}.
           hook: ZERO,
           hookData: ZERO32,
+          taxBps: 0n,
           permanent: false,
         })),
       ],

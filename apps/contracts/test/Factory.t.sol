@@ -7,6 +7,8 @@ import {SlotNamespaceBase} from "../src/namespace/SlotNamespaceBase.sol";
 import {SlotNamespaceCuration} from "../src/namespace/SlotNamespaceCuration.sol";
 import {IPermissionedRegistry, RegistryRoles} from "../src/interfaces/IENSv2.sol";
 import {ISlot} from "../src/interfaces/ISlots.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import {ForkBase} from "./ForkBase.sol";
 
 /**
@@ -51,7 +53,7 @@ contract FactoryTest is ForkBase {
 
         // The roles are real: the namespace can immediately use them.
         vm.prank(owner);
-        namespace.slotLabel("alpha", address(0), bytes32(0), false);
+        namespace.slotLabel("alpha", address(0), bytes32(0), 0, false);
         assertEq(
             uint8(registry.getStatus(uint256(keccak256("alpha")))), uint8(IPermissionedRegistry.Status.REGISTERED)
         );
@@ -64,9 +66,9 @@ contract FactoryTest is ForkBase {
         labels[1] = _spec("links");
         labels[2] = _spec("hire");
 
-        (address ns,) = _open(_ethNode("populated"), "populated.eth", labels);
+        (address ns,) = _open("populated.eth", labels);
 
-        (, string[] memory got,) = SlotNamespace(ns).listing();
+        (, string[] memory got,) = SlotNamespace(payable(ns)).listing();
         assertEq(got.length, 3);
         assertEq(got[0], "gm");
         assertEq(got[2], "hire");
@@ -76,40 +78,56 @@ contract FactoryTest is ForkBase {
     /// @dev The factory has no authority there, so the roles are the caller's to
     ///      grant — and until they do, slotting reverts rather than half-working.
     function test_OpenAcceptsAnExistingRegistry() public {
-        (, address reg) = _open(_ethNode("borrowed"), "borrowed.eth", _noLabels());
+        (, address reg) = _open("borrowed.eth", _noLabels());
 
         // Reuse it under a different parent node, which is legal: one registry
-        // can sit at many positions in ENSv2.
+        // can sit at many positions in ENSv2. The second parent needs owning
+        // too — a namespace answers to whoever holds its name.
+        _ownParent("reused.eth");
         (address ns,) = factory.open(
             SlotNamespaceFactory.OpenParams({
                 registry: IPermissionedRegistry(reg),
-                parentNode: _ethNode("reused"),
                 parentName: "reused.eth",
-                terms: _terms(),
-                owner: owner,
+                currency: IERC20(address(0)),
+                taxBps: TAX_BPS,
+                minTenureSeconds: 0,
                 labels: _noLabels()
             })
         );
 
-        assertEq(address(SlotNamespace(ns).registry()), reg, "it took the registry it was given");
+        assertEq(address(SlotNamespace(payable(ns)).registry()), reg, "it took the registry it was given");
     }
 
     function test_AParentCannotBeOpenedTwice() public {
+        // `_open` would register the parent first, and `expectRevert` binds to
+        // the very next call — which would be that, not the one under test.
         vm.expectRevert(
             abi.encodeWithSelector(SlotNamespaceFactory.AlreadyOpened.selector, PARENT_NODE, address(namespace))
         );
-        _open(PARENT_NODE, "slotsdemo.eth", _noLabels());
+        factory.open(
+            SlotNamespaceFactory.OpenParams({
+                registry: IPermissionedRegistry(address(0)),
+                parentName: "slotsdemo.eth",
+                currency: IERC20(address(0)),
+                taxBps: TAX_BPS,
+                minTenureSeconds: 0,
+                labels: _noLabels()
+            })
+        );
     }
 
-    function test_ANamespaceCannotBeOpenedWithNoOwner() public {
+    /// @notice A name nobody owns has no namespace to open. `ownerOf` answers
+    ///         zero for an unregistered or expired name, and that is the whole
+    ///         check now — there is no owner argument left to get wrong.
+    function test_ANamespaceCannotBeOpenedForAnUnownedName() public {
         vm.expectRevert(SlotNamespaceFactory.ZeroAddress.selector);
         factory.open(
             SlotNamespaceFactory.OpenParams({
                 registry: IPermissionedRegistry(address(0)),
-                parentNode: _ethNode("ownerless"),
                 parentName: "ownerless.eth",
-                terms: _terms(),
-                owner: address(0),
+                currency: IERC20(address(0)),
+                taxBps: TAX_BPS,
+                minTenureSeconds: 0,
                 labels: _noLabels()
             })
         );
@@ -119,7 +137,7 @@ contract FactoryTest is ForkBase {
     function test_TheFactoryRecordsEveryNamespaceItOpens() public {
         assertEq(factory.count(), 1);
 
-        (address second,) = _open(_ethNode("secondname"), "secondname.eth", _noLabels());
+        (address second,) = _open("secondname.eth", _noLabels());
 
         assertEq(factory.count(), 2);
         assertEq(factory.at(1), second);

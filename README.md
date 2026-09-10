@@ -1,6 +1,6 @@
-# ens-slots
+# nameslots
 
-**Rentable ENS subnames — self-priced, always for sale, never squattable.**
+**Taxable subnames — self-priced, continuously taxed, never squattable.**
 
 A parent name's owner opens some of its subnames to a market. Whoever holds
 `base.l2beat.eth` sets its price, pays tax on that price continuously, and

@@ -12,6 +12,43 @@ import { waitForTransactionReceipt } from "wagmi/actions";
 import { encodeFunctionData } from "viem";
 
 /**
+ * One writer at a time, across the whole app.
+ *
+ * ── Why this is module-level and not a hook ─────────────────────────────────
+ *
+ * There are nine `useTx()` instances and six of them are mounted at once on a
+ * namespace page — the buy form, the records editor, the label form, collect
+ * all, the profile editor, and the `+100` USDC button that lives in the site
+ * header and is therefore clickable on every screen. Each had its own `pending`
+ * and no knowledge of the others.
+ *
+ * Nothing in this app passes a nonce, so viem fetches one per request. Two
+ * writes started before either mines are handed the SAME nonce, the first
+ * mines, and the second arrives stale:
+ *
+ *     Nonce provided for the transaction (31134) is lower than the current
+ *     nonce of the account.
+ *
+ * Minting USDC and then buying a second later is exactly that, and it is the
+ * most natural thing a visitor does.
+ *
+ * A promise chain rather than a boolean: a second write QUEUES behind the first
+ * instead of being dropped, so a user who presses two buttons gets two
+ * transactions in order rather than one and an error. Per tab, which is all
+ * this can know about — a second tab or a wallet with its own queue can still
+ * collide, which is why `readReason` also translates the message.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(work: () => Promise<T>): Promise<T> {
+  // `catch` on the CHAIN, not on the work: one failed transaction must not
+  // poison the queue for every write after it.
+  const next = queue.then(work, work);
+  queue = next.catch(() => {});
+  return next;
+}
+
+/**
  * Send, wait, and actually check.
  *
  * Carried over from 0xSlots, where this was written after a bug:
@@ -44,10 +81,12 @@ export function useTx() {
     setError(null);
     setPending(label);
     try {
-      const hash = await writeContractAsync({ chainId: appChainId, ...request });
-      const receipt = await waitForTransactionReceipt(config, { hash });
-      if (receipt.status !== "success") throw new Error("Transaction reverted");
-      return receipt;
+      return await enqueue(async () => {
+        const hash = await writeContractAsync({ chainId: appChainId, ...request });
+        const receipt = await waitForTransactionReceipt(config, { hash });
+        if (receipt.status !== "success") throw new Error("Transaction reverted");
+        return receipt;
+      });
     } catch (e) {
       setError(readReason(e));
       return null;
@@ -207,5 +246,9 @@ function readReason(e: unknown): string {
     return "Your wallet is on a different network. Switch it, or pick the matching one in the header.";
   if (/user rejected|denied transaction/i.test(first))
     return "You declined it in your wallet.";
+  // Two writes raced for one nonce. The queue above prevents this within a
+  // tab; a second tab, or a wallet running its own queue, still can.
+  if (/nonce/i.test(first))
+    return "Another transaction is still going through — give it a second and try again.";
   return first;
 }

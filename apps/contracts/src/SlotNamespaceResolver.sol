@@ -102,12 +102,12 @@ contract SlotNamespaceResolver is VersionedUUPS, IExtendedResolver, IERC165 {
 
         // The parent name itself, then one label down.
         address found = factory.namespaceOf(node);
-        if (found != address(0)) return (SlotNamespace(found), node);
+        if (found != address(0)) return (SlotNamespace(payable(found)), node);
 
         found = factory.namespaceOf(_namehash(name, uint256(uint8(name[0])) + 1));
         if (found == address(0)) revert UnknownName();
 
-        return (SlotNamespace(found), node);
+        return (SlotNamespace(payable(found)), node);
     }
 
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {

@@ -142,7 +142,7 @@ export function OgFrame({
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
         <Mark size={56} />
         <div style={{ display: "flex", fontSize: 30, fontWeight: 700, color: INK }}>
-          ENS Slots
+          Nameslots
         </div>
       </div>
 

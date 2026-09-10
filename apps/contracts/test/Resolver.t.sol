@@ -78,14 +78,14 @@ contract ResolverTest is ForkBase {
      */
     function test_OneResolverServesEveryNamespace() public {
         bytes32 otherNode = _ethNode("secondname");
-        (address other,) = _open(otherNode, "secondname.eth", _noLabels());
+        (address other,) = _open("secondname.eth", _noLabels());
 
         (address slotA,) = _slot("alpha", address(0), false);
         _take(slotA, alice, 1 ether);
 
         vm.prank(owner);
         (address slotB,) =
-            SlotNamespace(other).slotLabel("alpha", address(0), bytes32(0), false);
+            SlotNamespace(payable(other)).slotLabel("alpha", address(0), bytes32(0), 0, false);
         _take(slotB, bob, 1 ether);
 
         assertEq(_addr(_dnsEncode("alpha", "slotsdemo", "eth")), alice, "the first namespace's name");

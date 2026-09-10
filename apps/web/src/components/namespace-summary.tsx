@@ -6,9 +6,11 @@ import { formatUnits } from "viem";
 import { useAccount } from "wagmi";
 
 import { DECIMALS, isDollarPegged, SYMBOL } from "@/lib/currency";
+import { shortAddress } from "@/lib/format";
 
 import { Button } from "@/components/ui/button";
 import { useCollectAll } from "@/hooks/use-collect-all";
+import { useNamespaceBalance } from "@/hooks/use-namespace-balance";
 import type { Namespace } from "@/hooks/use-namespaces";
 import { formatUsd, usdOf, useTokenPrice } from "@/hooks/use-token-price";
 import { MONTH_SECONDS, rentFor } from "@/lib/runway";
@@ -51,9 +53,36 @@ export function NamespaceSummary({
   const price = useTokenPrice();
   const showUsd = !isDollarPegged();
   const { collectAll, batched, busy, error } = useCollectAll();
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
+  const treasury = useNamespaceBalance(namespace.address);
+
+  /**
+   * Collect, then send it on, from one press.
+   *
+   * Tax is paid to the namespace rather than to a person — that is what keeps
+   * the income attached to the parent name instead of to whoever opened it —
+   * so collecting moves money out of the slots and stops there. Left as two
+   * buttons, pressing the first made a second one appear, which reads as the
+   * first having half-worked rather than as a second leg of the same trip.
+   *
+   * Two transactions unless the wallet batches, and that is fine: they are
+   * sequential either way, and `useTx` queues writes so the second cannot race
+   * the first for a nonce.
+   *
+   * The standalone Withdraw stays for the balance somebody ELSE's collect left
+   * here, which this button would never see.
+   */
+  async function collectAndWithdraw() {
+    const ok = await collectAll(collectable);
+    if (ok) await treasury.withdraw();
+  }
 
   const held = namespace.subnames.filter((s) => s.state && !s.state.isVacant);
+  // Only occupied slots earn. A vacant one is inventory, not income.
+  const earning = held;
+  const isOwner =
+    !!address && namespace.owner.toLowerCase() === address.toLowerCase();
+
 
   const monthly = held.reduce(
     (sum, s) => sum + rentFor(MONTH_SECONDS, s.state!.price, s.state!.taxBps),
@@ -83,16 +112,35 @@ export function NamespaceSummary({
   return (
     <div className="rounded-[--radius-card] border border-line bg-surface">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5">
-        <Stat
-          label="Held at"
-          value={`${trim(namespace.totalValue)} ${SYMBOL}`}
-          sub={showUsd ? formatUsd(usdOf(namespace.totalValue, price)) : null}
-        />
-        <Stat
-          label="Revenue"
-          value={`${trim(monthly)} ${SYMBOL}/mo`}
-          sub={showUsd ? formatUsd(usdOf(monthly, price)) : null}
-        />
+        {/*
+          * The namespace as a sentence rather than two labelled figures.
+          *
+          * "Held at" was the sum of what the holders say their names are
+          * worth, which is a number about THEM. What an owner is here for is
+          * what it earns and where it goes — and the third of those was
+          * nowhere on the page at all, even though it is now derived from the
+          * parent name rather than chosen, and so is the one thing about this
+          * namespace most worth stating out loud.
+          */}
+        <p className="text-sm text-ink-soft">
+          <span className="font-semibold tabular-nums text-ink">
+            {earning.length}
+          </span>{" "}
+          {earning.length === 1 ? "slot" : "slots"} earning{" "}
+          <span className="font-semibold tabular-nums text-ink">
+            {trim(monthly)} {SYMBOL}/mo
+          </span>
+          {showUsd && formatUsd(usdOf(monthly, price)) ? (
+            <span className="text-ink-faint">
+              {" "}
+              ({formatUsd(usdOf(monthly, price))})
+            </span>
+          ) : null}{" "}
+          to{" "}
+          <span className="font-medium text-ink">
+            {isOwner ? "you" : shortAddress(namespace.owner)}
+          </span>
+        </p>
         <Stat
           label="Collectable"
           value={
@@ -106,16 +154,48 @@ export function NamespaceSummary({
           sub={showUsd ? formatUsd(usdOf(ticking, price)) : null}
         />
 
+        {/*
+          * Money that has left the slots but not yet reached the owner.
+          *
+          * Collecting flushes tax to the RECIPIENT, which is the namespace
+          * itself — that is what keeps the income attached to the name rather
+          * than to whoever opened it. So there are two steps now, and hiding
+          * the middle one would leave a figure that vanished from
+          * "collectable" and appeared nowhere.
+          */}
+        {treasury.amount > 0n && (
+          <Stat
+            label="To withdraw"
+            value={`${trim(treasury.amount)} ${SYMBOL}`}
+            sub={showUsd ? formatUsd(usdOf(treasury.amount, price)) : null}
+          />
+        )}
+
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {actions}
+          {treasury.amount > 0n && (
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={treasury.withdrawing}
+              // Anyone may press it; it can only pay the owner.
+              onClick={treasury.withdraw}
+              title="Send what the namespace holds to whoever owns the parent name"
+            >
+              {treasury.withdrawing ? <Loader2 className="animate-spin" /> : <HandCoins />}
+              Withdraw
+            </Button>
+          )}
           <Button
             size="sm"
             variant={collectableNow > 0n ? "primary" : "outline"}
             // Disabled without a wallet, rather than failing on click. The
             // button used to invite a press it could never honour, and answered
             // with a line of wagmi's internals under the card.
-            disabled={busy || !isConnected || collectable.length === 0}
-            onClick={() => collectAll(collectable)}
+            disabled={
+              busy || treasury.withdrawing || !isConnected || collectable.length === 0
+            }
+            onClick={collectAndWithdraw}
             title={
               !isConnected
                 ? "Connect a wallet to collect"
@@ -126,8 +206,16 @@ export function NamespaceSummary({
                     : "One transaction per slot — the factory on this chain predates collectAll"
             }
           >
-            {busy ? <Loader2 className="animate-spin" /> : <HandCoins />}
-            {busy ? "Collecting…" : "Collect all"}
+            {busy || treasury.withdrawing ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <HandCoins />
+            )}
+            {busy
+              ? "Collecting…"
+              : treasury.withdrawing
+                ? "Sending…"
+                : "Collect all"}
           </Button>
         </div>
       </div>

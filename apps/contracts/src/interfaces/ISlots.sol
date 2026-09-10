@@ -54,4 +54,25 @@ interface ISlot {
     function buy(address account, uint256 selfAssessedPrice, uint256 depositAmount, uint256 maxPayment) external payable;
 
     function release() external;
+
+    /// @notice Queue a change of terms. `onlyManager`, and it only ever
+    ///         QUEUES: terms ripen for `TERMS_DELAY` and land at the next
+    ///         occupancy change, so nothing moves under a sitting occupant.
+    function proposeTerms(
+        uint256 newTaxBps,
+        address newHook,
+        bytes32 newHookData,
+        bool changeTax,
+        bool changeHook
+    ) external;
+
+    /// @notice Drop a queued change before it lands. `onlyManager`.
+    function cancelTerms(bool cancelTax, bool cancelHook) external;
+
+    /// @notice Take a payout that could not be pushed. Anyone may call it on
+    ///         anyone's behalf; the funds always go to `account`.
+    function claim(address account) external;
+
+    /// @notice Flush accrued tax to the recipient. Anyone may call.
+    function collect() external;
 }

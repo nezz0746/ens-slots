@@ -162,29 +162,14 @@ export default function RegisterPage() {
           // Zero: let the factory deploy the registry, which is the only way
           // the namespace gets its roles in the same transaction.
           registry: ZERO,
-          parentNode: node,
           parentName: `${clean}.eth`,
-          terms: {
-            recipient: address,
-            // MockUSDC, like everything else this app prices. Opened with the
-            // zero address instead, the slots would be denominated in native
-            // ETH while every figure on screen was formatted as 6-decimal
-            // USDC — and the ERC-20 paths the hold form takes would revert.
-            currency,
-            manager: ZERO,
-            // Zero days means no hook at all — and the slot rejects a hook
-            // paired with empty data, or data with no hook, so the two move
-            // together.
-            hook: tenureSeconds > 0n ? addresses.minimumTenureHook : ZERO,
-            hookData: `0x${tenureSeconds.toString(16).padStart(64, "0")}`,
-            taxBps,
-            minDepositSeconds: 604_800n,
-            mutableTax: false,
-            mutableHook: false,
-          },
-          owner: address,
-          // None yet. Labels are opened from the namespace's own page, where
-          // there is something to look at while choosing them.
+          // MockUSDC, like everything else this app prices. Opened with the
+          // zero address instead, the slots would be denominated in native ETH
+          // while every figure on screen was formatted as 6-decimal USDC — and
+          // the ERC-20 paths the hold form takes would revert.
+          currency,
+          taxBps,
+          minTenureSeconds: tenureSeconds,
           labels: [],
         },
       ],

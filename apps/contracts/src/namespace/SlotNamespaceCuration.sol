@@ -26,6 +26,11 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
         string label;
         address hook;
         bytes32 hookData;
+        /// @dev Zero means "inherit the namespace's", exactly as {hook} does.
+        ///      Note the slot itself treats a zero tax as INVALID rather than
+        ///      as absent, so the two words disagree about zero — which is why
+        ///      this one is only ever read here.
+        uint256 taxBps;
         bool permanent;
     }
 
@@ -41,12 +46,14 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
      *      Economic terms deliberately do not vary: price is self-assessed, so
      *      a better label is priced higher by its own occupant at the same rate.
      */
-    function slotLabel(string calldata label, address hook, bytes32 hookData, bool permanent_)
+    function slotLabel(string calldata label, address hook, bytes32 hookData, uint256 taxBps, bool permanent_)
         external
         onlyOwner
         returns (address slot, uint256 tokenId)
     {
-        return _slotOne(LabelSpec({label: label, hook: hook, hookData: hookData, permanent: permanent_}));
+        return _slotOne(
+            LabelSpec({label: label, hook: hook, hookData: hookData, taxBps: taxBps, permanent: permanent_})
+        );
     }
 
     /// @notice Open several labels in one transaction. All or nothing — a
@@ -81,6 +88,19 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
                 init.hook = spec.hook;
                 init.hookData = spec.hookData;
             }
+            // Same convention as the hook: zero inherits the namespace's rate.
+            if (spec.taxBps != 0) init.taxBps = spec.taxBps;
+
+            // This namespace is every slot's manager AND its recipient, and
+            // both are the same argument. A slot's `manager` and `recipient`
+            // are written once at creation and have no setter, so naming a
+            // PERSON there freezes today's owner into a name they may not hold
+            // next month — control and income would stay behind when the ENS
+            // name moved on. Naming the namespace keeps both attached to the
+            // name, because {owner} is derived from it.
+            init.manager = address(this);
+            init.recipient = address(this);
+
             slot = slotFactory.createSlot(init);
         }
 
@@ -136,6 +156,39 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
         registry.unregister(uint256(labelhash));
 
         emit LabelUnslotted(node, label);
+    }
+
+    /**
+     * @notice Queue a change to one label's tax or hook.
+     *
+     * @dev The namespace is the slot's manager, so this is the only door to
+     *      `proposeTerms`, and it is `onlyOwner`. What comes out the other side
+     *      is not immediate: the slot ripens a proposal for its own delay and
+     *      applies it at the NEXT occupancy change, so an owner can re-price
+     *      the market they run without ever moving the ground under somebody
+     *      who has already paid.
+     *
+     *      Zero tax is rejected by the slot rather than meaning "inherit" — the
+     *      opposite of {LabelSpec}. Pass `changeTax` false to leave it alone.
+     */
+    function proposeLabelTerms(
+        string calldata label,
+        uint256 taxBps,
+        address hook,
+        bytes32 hookData,
+        bool changeTax,
+        bool changeHook
+    ) external onlyOwner {
+        bytes32 node = _node(keccak256(bytes(label)));
+        _requireSlot(node).proposeTerms(taxBps, hook, hookData, changeTax, changeHook);
+        emit TermsProposed(node, taxBps, hook, hookData, changeTax, changeHook);
+    }
+
+    /// @notice Drop a queued change before it lands.
+    function cancelLabelTerms(string calldata label, bool cancelTax, bool cancelHook) external onlyOwner {
+        bytes32 node = _node(keccak256(bytes(label)));
+        _requireSlot(node).cancelTerms(cancelTax, cancelHook);
+        emit TermsCancelled(node, cancelTax, cancelHook);
     }
 
     /// @notice Point future registrations at a new resolver — an escape hatch

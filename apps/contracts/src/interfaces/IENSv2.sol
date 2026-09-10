@@ -65,12 +65,56 @@ interface IPermissionedRegistry is IRegistry {
 
     function getTokenId(uint256 anyId) external view returns (uint256);
 
+    /// @notice The name's single owner, or zero — which is also what an
+    ///         EXPIRED name answers. See ENSV2.txt.
+    function ownerOf(uint256 anyId) external view returns (address);
+
     function grantRootRoles(uint256 roleBitmap, address account) external returns (bool);
 
     function hasRootRoles(uint256 roleBitmap, address account) external view returns (bool);
 }
 
 /// @notice Deploys the UUPS proxies ENSv2 uses for per-name registries.
+/// @notice The `.eth` registrar, as the seed and the tests drive it.
+interface IEthRegistrar {
+    function isAvailable(string calldata label) external view returns (bool);
+
+    function getRegisterPrice(string calldata label, uint64 duration, address paymentToken)
+        external
+        view
+        returns (uint256 base, uint256 premium);
+
+    function makeCommitment(
+        string calldata label,
+        address owner,
+        bytes32 secret,
+        address subregistry,
+        address resolver,
+        uint64 duration,
+        bytes32 referrer
+    ) external view returns (bytes32);
+
+    function commit(bytes32 commitment) external;
+
+    function MIN_COMMITMENT_AGE() external view returns (uint256);
+
+    function register(
+        string calldata label,
+        address owner,
+        bytes32 secret,
+        address subregistry,
+        address resolver,
+        uint64 duration,
+        address paymentToken,
+        bytes32 referrer
+    ) external returns (uint256 tokenId);
+}
+
+interface IMintableERC20 {
+    function mint(address to, uint256 amount) external;
+    function approve(address spender, uint256 amount) external returns (bool);
+}
+
 interface IVerifiableFactory {
     function deployProxy(address implementation, uint256 salt, bytes memory data) external returns (address proxy);
 }
