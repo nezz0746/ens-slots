@@ -1,13 +1,11 @@
 "use client";
 
-import { ArrowRight, Globe, ImageOff } from "lucide-react";
+import { ArrowRight, ImageOff } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import type { Namespace } from "@/hooks/use-namespaces";
 import { hasProfile, type Profile } from "@/hooks/use-profile";
-import { formatAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,101 +39,36 @@ export function NamespaceRow({
   profile?: Profile;
 }) {
   const rich = hasProfile(profile);
-  const site = profile?.url ? hostOf(profile.url) : "";
-  const available = ns.subnames.length - ns.occupied;
 
   return (
     <div className="group relative flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-canvas/60">
       {/*
-       * The row is one target, and the website is another inside it.
-       *
-       * An `<a>` cannot contain an `<a>`, so wrapping the row in a Link would
-       * make the website link impossible rather than merely awkward. This is
-       * the stretched-link pattern: navigation is an invisible overlay across
-       * the row, and the one thing that must sit above it says so.
+       * A stretched link: navigation is an invisible overlay across the whole
+       * row. It stays that way rather than becoming a plain wrapping `<a>`
+       * because the row is a flex layout with an avatar in it, and an anchor
+       * around the lot changes what the browser does with a drag.
        */}
       <Link
         href={`/n/${ns.address}`}
         className="absolute inset-0 z-10 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none focus-visible:-outline-offset-2"
-        aria-label={`${ns.parentName} — ${ns.subnames.length} slotted subnames`}
+        aria-label={ns.parentName}
       />
 
       <Avatar src={profile?.avatar ?? ""} rich={rich} />
 
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium tracking-tight">
-            {ns.parentName}
-          </span>
-          {/*
-           * Said out loud, and deliberately: this
-           * profile was read straight off the contract because the parent
-           * `.eth` name does not point at the namespace's resolver, so no
-           * other ENS client can see any of it. Drawing it like one that DOES
-           * resolve would claim something the app is not doing — and it is the
-           * owner, looking at their own row, who most needs to know.
-           */}
-          {rich && profile!.via === "contract" && (
-            <span
-              className="shrink-0 rounded-full bg-warn-soft px-1.5 py-0.5 text-[10px] font-medium text-warn"
-              title="Read from the contract. This name's parent does not point at the namespace's resolver, so no other ENS client can see this profile."
-            >
-              not resolving
-            </span>
-          )}
-        </div>
-
-        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[11px] text-ink-faint">
-          {profile?.description && (
-            <span className="truncate">{profile.description}</span>
-          )}
-          {site && (
-            <a
-              href={profile!.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              // Above the overlay, so this goes to the website and every other
-              // pixel goes to the namespace.
-              className="relative z-20 inline-flex shrink-0 items-center gap-1 transition-colors hover:text-brand"
-            >
-              <Globe className="size-3 shrink-0" />
-              <span className="truncate">{site}</span>
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* A few of the spaces by name. Hidden on narrow screens, where the
-          counts beside them say enough in less room. */}
-      <div className="hidden max-w-[16rem] flex-wrap justify-end gap-1 lg:flex">
-        {ns.subnames.slice(0, 3).map((s) => (
-          <span
-            key={s.node}
-            className="truncate rounded-md bg-brand-soft px-1.5 py-0.5 text-[11px] text-brand-ink"
-          >
-            {s.label}
-          </span>
-        ))}
-        {ns.subnames.length > 3 && (
-          <span className="px-0.5 py-0.5 text-[11px] text-ink-faint">
-            +{ns.subnames.length - 3}
-          </span>
-        )}
-      </div>
-
-      <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-        <Badge>{ns.subnames.length} slotted</Badge>
-        {ns.occupied > 0 && <Badge tone="good">{ns.occupied} held</Badge>}
-        {available > 0 && <Badge tone="brand">{available} available</Badge>}
-      </div>
-
-      <div className="w-24 shrink-0 text-right text-xs tabular-nums">
-        {ns.totalValue > 0n ? (
-          <span className="font-medium">{formatAmount(ns.totalValue)}</span>
-        ) : (
-          <span className="text-ink-faint">—</span>
-        )}
-      </div>
+      {/*
+        * The name, and nothing else.
+        *
+        * This row used to carry the profile description, the website, three
+        * label chips, three count badges and the total valuation — six kinds
+        * of thing, none of which anybody chooses a namespace by. They are all
+        * on the namespace's own page, one click away, with room to be read.
+        *
+        * A list is for picking. What you pick by is the name.
+        */}
+      <span className="min-w-0 flex-1 truncate font-medium tracking-tight">
+        {ns.parentName}
+      </span>
 
       <ArrowRight className="size-4 shrink-0 text-ink-faint transition-colors group-hover:text-brand" />
     </div>
