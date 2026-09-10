@@ -31,12 +31,35 @@ const urbanist = Urbanist({
   variable: "--font-urbanist",
 });
 
+/**
+ * Absolute URLs for the link previews.
+ *
+ * `opengraph-image` files emit a RELATIVE path unless Next knows the origin, and
+ * a relative OG image is one no crawler can fetch. Set this per deployment; the
+ * localhost default is what makes the cards visible while developing, which is
+ * the only time anybody looks at them by hand.
+ */
 export const metadata: Metadata = {
-  title: "ENS Slots",
-  description: "ENS subnames, always for sale.",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  ),
+  title: {
+    default: "ENS Slots",
+    template: "%s · ENS Slots",
+  },
+  description:
+    "Rentable ENS subnames. The holder sets the price, pays tax on it continuously, and can be taken out by anyone willing to pay it.",
   // An independent project. It wears ENS's colours; the name and the symbol
   // are its own, and no ENS mark appears anywhere in it.
   applicationName: "ENS Slots",
+  openGraph: {
+    type: "website",
+    siteName: "ENS Slots",
+    title: "ENS Slots",
+    description:
+      "Rentable ENS subnames. The holder sets the price, pays tax on it continuously, and can be taken out by anyone willing to pay it.",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default async function RootLayout({

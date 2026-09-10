@@ -51,26 +51,25 @@ contract FactoryTest is ForkBase {
 
         // The roles are real: the namespace can immediately use them.
         vm.prank(owner);
-        namespace.slotLabel("sponsor", SlotNamespaceBase.LabelKind.COMMON, address(0), bytes32(0), false);
+        namespace.slotLabel("alpha", address(0), bytes32(0), false);
         assertEq(
-            uint8(registry.getStatus(uint256(keccak256("sponsor")))), uint8(IPermissionedRegistry.Status.REGISTERED)
+            uint8(registry.getStatus(uint256(keccak256("alpha")))), uint8(IPermissionedRegistry.Status.REGISTERED)
         );
     }
 
     /// @notice And it can open the labels too, so a namespace arrives populated.
     function test_OpenCanSlotLabelsInTheSameTransaction() public {
         SlotNamespaceCuration.LabelSpec[] memory labels = new SlotNamespaceCuration.LabelSpec[](3);
-        labels[0] = _spec("gm", SlotNamespaceBase.LabelKind.SPONSORING);
-        labels[1] = _spec("links", SlotNamespaceBase.LabelKind.COMMON);
-        labels[2] = _spec("hire", SlotNamespaceBase.LabelKind.SPONSORING);
+        labels[0] = _spec("gm");
+        labels[1] = _spec("links");
+        labels[2] = _spec("hire");
 
         (address ns,) = _open(_ethNode("populated"), "populated.eth", labels);
 
-        (, string[] memory got,, SlotNamespaceBase.LabelKind[] memory kinds) = SlotNamespace(ns).listing();
+        (, string[] memory got,) = SlotNamespace(ns).listing();
         assertEq(got.length, 3);
         assertEq(got[0], "gm");
         assertEq(got[2], "hire");
-        assertEq(uint8(kinds[1]), uint8(SlotNamespaceBase.LabelKind.COMMON));
     }
 
     /// @notice A namespace can still be opened on a registry somebody else made.
@@ -133,9 +132,9 @@ contract FactoryTest is ForkBase {
     /// @notice Several labels, one signature.
     function test_SlotLabelsOpensSeveralAtOnce() public {
         SlotNamespaceCuration.LabelSpec[] memory labels = new SlotNamespaceCuration.LabelSpec[](3);
-        labels[0] = _spec("one", SlotNamespaceBase.LabelKind.COMMON);
-        labels[1] = _spec("two", SlotNamespaceBase.LabelKind.SPONSORING);
-        labels[2] = _spec("three", SlotNamespaceBase.LabelKind.COMMON);
+        labels[0] = _spec("one");
+        labels[1] = _spec("two");
+        labels[2] = _spec("three");
 
         vm.prank(owner);
         address[] memory slots = namespace.slotLabels(labels);
@@ -154,8 +153,8 @@ contract FactoryTest is ForkBase {
         _slot("taken", address(0), false);
 
         SlotNamespaceCuration.LabelSpec[] memory labels = new SlotNamespaceCuration.LabelSpec[](2);
-        labels[0] = _spec("fresh", SlotNamespaceBase.LabelKind.COMMON);
-        labels[1] = _spec("taken", SlotNamespaceBase.LabelKind.COMMON);
+        labels[0] = _spec("fresh");
+        labels[1] = _spec("taken");
 
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.AlreadySlotted.selector, "taken"));
@@ -166,7 +165,7 @@ contract FactoryTest is ForkBase {
 
     function test_OnlyTheOwnerMayBatchSlot() public {
         SlotNamespaceCuration.LabelSpec[] memory labels = new SlotNamespaceCuration.LabelSpec[](1);
-        labels[0] = _spec("mine", SlotNamespaceBase.LabelKind.COMMON);
+        labels[0] = _spec("mine");
 
         vm.prank(alice);
         vm.expectRevert();
@@ -175,26 +174,26 @@ contract FactoryTest is ForkBase {
 
     /// @notice An occupant's whole payload in one signature.
     function test_SetTextsWritesSeveralRecordsForTheOccupant() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
         string[] memory keys = new string[](3);
         string[] memory values = new string[](3);
         (keys[0], values[0]) = ("avatar", "https://example.com/a.png");
         (keys[1], values[1]) = ("url", "https://example.com");
-        (keys[2], values[2]) = ("com.ethglobal.sponsor", "{\"v\":1}");
+        (keys[2], values[2]) = ("com.twitter", "https://twitter.com/example");
 
         vm.prank(alice);
-        namespace.setTexts(_node("sponsor"), keys, values);
+        namespace.setTexts(_node("alpha"), keys, values);
 
-        assertEq(namespace.textOf(_node("sponsor"), "avatar"), "https://example.com/a.png");
-        assertEq(namespace.textOf(_node("sponsor"), "url"), "https://example.com");
-        assertEq(namespace.textOf(_node("sponsor"), "com.ethglobal.sponsor"), "{\"v\":1}");
+        assertEq(namespace.textOf(_node("alpha"), "avatar"), "https://example.com/a.png");
+        assertEq(namespace.textOf(_node("alpha"), "url"), "https://example.com");
+        assertEq(namespace.textOf(_node("alpha"), "com.twitter"), "https://twitter.com/example");
     }
 
     /// @notice The batch is gated exactly as the single write is.
     function test_SetTextsIsStillOnlyForTheOccupant() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
         string[] memory keys = new string[](1);
@@ -203,11 +202,11 @@ contract FactoryTest is ForkBase {
 
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.NotOccupant.selector, bob, alice));
-        namespace.setTexts(_node("sponsor"), keys, values);
+        namespace.setTexts(_node("alpha"), keys, values);
     }
 
     function test_MismatchedRecordArraysRevert() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
         string[] memory keys = new string[](2);
@@ -215,7 +214,7 @@ contract FactoryTest is ForkBase {
 
         vm.prank(alice);
         vm.expectRevert(SlotNamespaceBase.LengthMismatch.selector);
-        namespace.setTexts(_node("sponsor"), keys, values);
+        namespace.setTexts(_node("alpha"), keys, values);
     }
 
     /// @notice The namespace's whole profile in one signature.
@@ -244,7 +243,7 @@ contract FactoryTest is ForkBase {
      */
     function test_MulticallBatchesLabelsAndProfileTogether() public {
         SlotNamespaceCuration.LabelSpec[] memory labels = new SlotNamespaceCuration.LabelSpec[](1);
-        labels[0] = _spec("gm", SlotNamespaceBase.LabelKind.SPONSORING);
+        labels[0] = _spec("gm");
 
         bytes[] memory calls = new bytes[](2);
         calls[0] = abi.encodeCall(SlotNamespaceCuration.slotLabels, (labels));

@@ -29,23 +29,22 @@ export default function Home() {
        * The pitch and the proof, side by side.
        *
        * The snippet is the whole argument for doing this on ENS rather than in
-       * a database: reading a space is `getEnsText`, with no SDK, no API key
-       * and no contract address in sight. Saying that in prose asks to be taken
-       * on trust; four lines of viem can be pasted into a console.
+       * a database: asking who holds a name is `getEnsAddress`, with no SDK, no
+       * API key and no contract address in sight. Saying that in prose asks to
+       * be taken on trust; three lines of viem can be pasted into a console.
        */}
       <section className="grid items-center gap-8 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
         <div className="space-y-4">
           {/* Steps up rather than jumping: 3rem is a headline on a laptop and
               a wall of text on a phone, so the small screen keeps the old size. */}
           <h1 className="max-w-2xl text-4xl leading-[1.1] font-semibold tracking-tight text-balance sm:text-5xl">
-            Sponsor a name that is{" "}
-            <span className="text-brand">always for sale</span>
+            <span className="text-brand">Rentable</span> ENS subnames
           </h1>
           <p className="max-w-xl text-sm leading-relaxed text-ink-soft">
-            Every subname here is a space someone can sponsor — priced by
-            whoever holds it, taxed continuously, and takeable by anyone who
-            values it more. Nothing can be squatted, and what a space shows
-            resolves through plain ENS.
+            Open subnames of a name you own. Whoever holds one sets its price,
+            pays tax on it continuously, and can be taken out by anyone willing
+            to pay that price. Nothing can be squatted, and the name resolves to
+            whoever holds it through plain ENS.
           </p>
         </div>
 
@@ -106,25 +105,23 @@ export default function Home() {
 }
 
 /**
- * How another app reads one of these spaces.
+ * How another app asks who holds one of these names.
  *
- * Deliberately not a call to anything in this repo. The record is an ordinary
- * ENS text record under an ordinary key, so the whole integration is a resolver
- * lookup any client already knows how to do — which is the point, and is only
+ * Deliberately not a call to anything in this repo. Occupancy is answered by
+ * `addr()` through an ordinary resolver, so the whole integration is a lookup
+ * any client already knows how to do — which is the point, and is only
  * convincing if the code on the page has no import from us in it.
  */
 function Snippet() {
   const lines: [string, string][] = [
     ["k", "const"],
-    ["p", " sponsor = "],
+    ["p", " holder = "],
     ["k", "await"],
-    ["p", " client.getEnsText({\n"],
+    ["p", " client.getEnsAddress({\n"],
     ["p", "  name: "],
-    ["s", '"sponsor-1.ethglobal.eth"'],
-    ["p", ",\n  key: "],
-    ["s", '"com.ethglobal.sponsor"'],
+    ["s", '"base.l2beat.eth"'],
     ["p", ",\n});\n\n"],
-    ["c", "// → { type: \"url\", data: {…}, metadata: {…} }"],
+    ["c", "// → 0x7099…79C8 — whoever holds it right now"],
   ];
 
   return (

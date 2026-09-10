@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
 
-import { KIND_SPONSORING } from "@/lib/addresses";
 import { useAddresses, useIsDeployed } from "@/hooks/use-addresses";
 import { namespaceAbi, namespaceFactoryAbi, slotAbi } from "@/lib/abis";
 
@@ -50,8 +49,6 @@ export interface Subname {
   node: `0x${string}`;
   label: string;
   slot: `0x${string}`;
-  /** True for a label opened as a sponsoring space. See `LabelKind`. */
-  sponsoring: boolean;
   state?: SlotState;
 }
 
@@ -67,12 +64,11 @@ export interface Namespace {
   totalValue: bigint;
 }
 
-/** What `listing()` hands back: nodes, labels, slots, kinds — four arrays. */
+/** What `listing()` hands back: nodes, labels, slots — three arrays. */
 type Listing = [
   readonly `0x${string}`[],
   readonly string[],
   readonly `0x${string}`[],
-  readonly number[],
 ];
 
 /** Flatten the tuple `getSlotInfo` returns into what the UI actually reads. */
@@ -148,7 +144,7 @@ export function useNamespaces(only?: `0x${string}`) {
     let cursor = 0;
     return list.map((address, i) => {
       const listing = meta[i * PER_NS + 4]?.result as Listing | undefined;
-      const [nodes, labels, slotAddrs, kinds] = listing ?? [[], [], [], []];
+      const [nodes, labels, slotAddrs] = listing ?? [[], [], []];
 
       const subnames: Subname[] = slotAddrs.map((slot, j) => {
         const info = infos?.[cursor++];
@@ -156,7 +152,6 @@ export function useNamespaces(only?: `0x${string}`) {
           node: nodes[j],
           label: labels[j],
           slot,
-          sponsoring: kinds[j] === KIND_SPONSORING,
           state:
             info?.status === "success" ? toState(info.result) : undefined,
         };

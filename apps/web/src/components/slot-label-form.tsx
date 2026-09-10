@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { useTx } from "@/hooks/use-tx";
 import { namespaceAbi } from "@/lib/abis";
 import type { Namespace } from "@/hooks/use-namespaces";
-import { KIND_SPONSORING } from "@/lib/addresses";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
 const ZERO32 =
@@ -32,8 +31,8 @@ const ZERO32 =
  *
  * ── Why a row has no options on it ──────────────────────────────────────────
  *
- * It used to carry three: kind, permanent, and a minimum tenure. Every space
- * here is a sponsoring space now, so the kind carries no information; the
+ * It used to carry three: kind, permanent, and a minimum tenure. The kind was
+ * application vocabulary and is gone from the contract entirely; the
  * minimum tenure is a promise the whole namespace makes, set once when it is
  * opened and passed to every slot through the terms; and permanent is off until
  * there is a reason to hand out an irreversible commitment through a form.
@@ -70,7 +69,6 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
       args: [
         queue.map((label) => ({
           label,
-          kind: KIND_SPONSORING,
           // Zero means "use the namespace's hook" — the minimum tenure set when
           // it was opened. See {SlotNamespaceCuration-_slotOne}.
           hook: ZERO,

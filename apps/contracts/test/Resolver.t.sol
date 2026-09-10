@@ -2,7 +2,6 @@
 pragma solidity ^0.8.24;
 
 import {SlotNamespace} from "../src/SlotNamespace.sol";
-import {SlotNamespaceBase} from "../src/namespace/SlotNamespaceBase.sol";
 import {SlotNamespaceResolver} from "../src/SlotNamespaceResolver.sol";
 import {ForkBase} from "./ForkBase.sol";
 
@@ -19,16 +18,16 @@ contract ResolverTest is ForkBase {
 
     /// @notice What the Universal Resolver will actually call.
     function test_TheResolverAnswersTheExtendedProfile() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
-        bytes memory dnsName = _dnsEncode("sponsor", "slotsdemo", "eth");
+        bytes memory dnsName = _dnsEncode("alpha", "slotsdemo", "eth");
 
         bytes memory answer = resolver.resolve(dnsName, abi.encodeWithSelector(bytes4(0x3b3b57de), bytes32(0)));
         assertEq(abi.decode(answer, (address)), alice, "addr(bytes32)");
 
         vm.prank(alice);
-        namespace.setText(_node("sponsor"), "url", "https://example.com");
+        namespace.setText(_node("alpha"), "url", "https://example.com");
 
         answer = resolver.resolve(dnsName, abi.encodeWithSelector(bytes4(0x59d1d43c), bytes32(0), "url"));
         assertEq(abi.decode(answer, (string)), "https://example.com", "text(bytes32,string)");
@@ -81,16 +80,16 @@ contract ResolverTest is ForkBase {
         bytes32 otherNode = _ethNode("secondname");
         (address other,) = _open(otherNode, "secondname.eth", _noLabels());
 
-        (address slotA,) = _slot("sponsor", address(0), false);
+        (address slotA,) = _slot("alpha", address(0), false);
         _take(slotA, alice, 1 ether);
 
         vm.prank(owner);
         (address slotB,) =
-            SlotNamespace(other).slotLabel("sponsor", SlotNamespaceBase.LabelKind.COMMON, address(0), bytes32(0), false);
+            SlotNamespace(other).slotLabel("alpha", address(0), bytes32(0), false);
         _take(slotB, bob, 1 ether);
 
-        assertEq(_addr(_dnsEncode("sponsor", "slotsdemo", "eth")), alice, "the first namespace's name");
-        assertEq(_addr(_dnsEncode("sponsor", "secondname", "eth")), bob, "the second one's, same resolver");
+        assertEq(_addr(_dnsEncode("alpha", "slotsdemo", "eth")), alice, "the first namespace's name");
+        assertEq(_addr(_dnsEncode("alpha", "secondname", "eth")), bob, "the second one's, same resolver");
         assertEq(address(resolver.factory()), address(factory), "and there is only one of it");
     }
 
@@ -113,11 +112,11 @@ contract ResolverTest is ForkBase {
 
     /// @notice `find` says which namespace answered, for debugging a dead name.
     function test_FindReportsTheNamespaceAndNode() public {
-        _slot("sponsor", address(0), false);
+        _slot("alpha", address(0), false);
 
-        (address ns, bytes32 node) = resolver.find(_dnsEncode("sponsor", "slotsdemo", "eth"));
+        (address ns, bytes32 node) = resolver.find(_dnsEncode("alpha", "slotsdemo", "eth"));
         assertEq(ns, address(namespace));
-        assertEq(node, _node("sponsor"));
+        assertEq(node, _node("alpha"));
 
         (ns, node) = resolver.find(_dnsEncode("slotsdemo", "eth"));
         assertEq(ns, address(namespace), "the parent name resolves to the same namespace");
@@ -126,19 +125,19 @@ contract ResolverTest is ForkBase {
 
     /// @notice An unsupported profile reverts the way ENS's own resolvers do.
     function test_AnUnsupportedProfileReverts() public {
-        _slot("sponsor", address(0), false);
+        _slot("alpha", address(0), false);
         bytes4 contenthash = 0xbc1c58d1;
 
         vm.expectRevert(abi.encodeWithSelector(SlotNamespaceResolver.UnsupportedResolverProfile.selector, contenthash));
-        resolver.resolve(_dnsEncode("sponsor", "slotsdemo", "eth"), abi.encodeWithSelector(contenthash, bytes32(0)));
+        resolver.resolve(_dnsEncode("alpha", "slotsdemo", "eth"), abi.encodeWithSelector(contenthash, bytes32(0)));
     }
 
     /// @notice ENSIP-9, which is what viem asks for by default.
     function test_TheCoinTypeProfileAnswersForEthAndNothingElse() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
-        bytes memory name = _dnsEncode("sponsor", "slotsdemo", "eth");
+        bytes memory name = _dnsEncode("alpha", "slotsdemo", "eth");
 
         bytes memory eth = resolver.resolve(name, abi.encodeWithSelector(bytes4(0xf1cb7e06), bytes32(0), uint256(60)));
         assertEq(abi.decode(eth, (bytes)), abi.encodePacked(alice), "coin type 60 is the occupant");

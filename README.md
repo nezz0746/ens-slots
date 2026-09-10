@@ -1,17 +1,17 @@
 # ens-slots
 
-**ENS subnames under common ownership — always for sale, never squattable.**
+**Rentable ENS subnames — self-priced, always for sale, never squattable.**
 
 A parent name's owner opens some of its subnames to a market. Whoever holds
-`sponsor.dailygwei.eth` sets their own price, pays tax on that price
-continuously, and can be bought out by anyone willing to pay it. Stop paying
-and you lose it. Every other subname under that parent is untouched.
+`base.l2beat.eth` sets its price, pays tax on that price continuously, and
+can be taken out by anyone willing to pay it. Stop paying and you lose it.
+Every other subname under that parent is untouched.
 
-Some of those subnames are **sponsoring spaces**: the holder publishes a small
-JSON payload into an ENS text record, and anything that speaks ENS can render
-it. No SDK, no API key, no permission — `getEnsText` and `JSON.parse`. And
-because `addr()` is the current holder, you can always ask *who paid to put this
-here*, which is not a question you can ask of sponsored content anywhere else.
+The name itself never moves. What follows the holder is *resolution*: `addr()`
+is whoever occupies the slot, read at the moment the question is asked, so a
+turnover has nothing to do and nothing that can fail. Records are the
+occupant's and scoped to their tenancy. No SDK, no API key, no permission —
+this is ordinary ENS all the way down.
 
 Built on [ENSv2](https://docs.ens.domains/ensv2) and
 [0xSlots](https://github.com/nezz0746/0xSlots), both deployed on Sepolia — so
@@ -164,7 +164,6 @@ supports it and falls back to one signature at a time where it does not.
 ```
 apps/contracts/     Foundry — the contracts, the fork tests, the deploy CLI
 apps/web/           Next.js — the app
-packages/sponsor/   the record standard: schemas, enrichment, parsing
 scripts/            the local stack: chain, seed, dev, protocol
 ENSV2.txt           working reference for ENSv2, incl. what the docs get wrong
 ```
@@ -196,23 +195,19 @@ New state is **appended above `__gap`**, decrementing the gap by what it takes.
 Yes — measured, not assumed:
 
 ```
-getEnsAddress({ name: "sponsor.dailygwei.eth" })                    → the holder
-getEnsText({ name: "sponsor.dailygwei.eth", key: RECORD_KEY })      → the payload
+getEnsAddress({ name: "base.l2beat.eth" })            → the current holder
+getEnsText({ name: "base.l2beat.eth", key: "url" })   → what they published
 ```
 
 Straight off `pnpm dev:local`, with no argument that this is anything but
 ordinary ENS:
 
 ```
-gm.nezzar.eth            0x3C44CdDdB6   url          318b
-pool.clanker.eth         0x3C44CdDdB6   pool         342b
-token.clanker.eth        0x70997970C5   token        291b
-app.clanker.eth          0x3C44CdDdB6   miniapp      344b
-sponsor.dailygwei.eth    0x70997970C5   url          362b
-press.dailygwei.eth      0x70997970C5   post         277b
-links.nezzar.eth         0x70997970C5   —            no record
-guest.dailygwei.eth      0x3C44CdDdB6   —            no record
-hire.nezzar.eth          null           —            no record
+base.l2beat.eth    2,400   0x70997970C5   url           https://base.org
+cool.l2beat.eth      600   0x3C44CdDdB6   url           https://bankr.bot
+cool.l2beat.eth      600   0x3C44CdDdB6   com.twitter   bankrbot
+rare.l2beat.eth      250   0x90F79bf6EB   —             held, nothing published
+fun.l2beat.eth         —   null           —             nobody holds this
 ```
 
 The parent names answer too, under the keys every ENS client already reads:
@@ -271,63 +266,16 @@ setText(node, "avatar", "…")     the occupant, on a subname they hold
 
 ---
 
-## Sponsoring spaces
+## Records
 
-A label is opened as **common** — an identity, pointing wherever its holder
-likes — or as **sponsoring**, a space whose purpose is to show what its holder
-publishes.
+Only the current holder writes them, under any ENS text key, and they are keyed
+by the slot's `tenureId` — so they clear on turnover and do not come back if the
+same person retakes the name later. Set an avatar, lose the slot, and it is
+gone. That is what makes the slot a lease rather than a property.
 
-The kind is a **declaration, not a permission.** `setText` is open to any key on
-any label either way, and gating it would buy nothing: a payload on an ordinary
-label harms nobody. It exists because a *vacant* label has no record to infer
-anything from, and somebody about to pay for one needs to know which market
-they are entering before they enter it.
-
-### The record
-
-One key, one self-describing payload:
-
-```
-com.ethglobal.sponsor  →  { v, type, data, metadata }
-```
-
-- **Raw JSON, not base64.** The field is a text record, not a URI, so the data-
-  URI wrapper has no reason to exist here. Cheaper, and readable in any ENS
-  explorer.
-- **`data`** is what the sponsor typed — a chain and an address, or a URL.
-  Sovereign; nobody else changes it.
-- **`metadata`** is derived from `data` at publish time, from keyless sources:
-  [GeckoTerminal](https://api.geckoterminal.com) for tokens and pools, a mini
-  app's own `farcaster.json`, Open Graph tags for anything else. Because it is
-  reproducible, a rotted logo or a renamed token can be re-derived without
-  asking the sponsor to retype anything.
-- **Nothing that moves lives in the record.** Price, TVL, volume are fetched at
-  render. The boundary is volatility, not source: a figure frozen at publish
-  would be wrong within the hour.
-
-Types ship in `packages/sponsor`: `token`, `pool`, `miniapp`, `post`, `url`.
-
-### Why an unknown type still renders
-
-Every type's metadata extends the same triple — `name`, `image`, `tagline` — so
-a client pinned months ago draws a payload written by a publisher that knows
-types it has never heard of. That is the difference between an open standard and
-a closed union of the types we happened to ship a renderer for.
-
-`parseSponsorRecord` validates the envelope separately from the type-specific
-half and returns `known: false` rather than nothing, and `SponsorCard` falls
-through to a generic renderer. Publish a record with any `type` string to see
-it. *(Nothing currently exercises this automatically — see Status.)*
-
-### Records are the occupant's
-
-Only the current holder writes them, and they are keyed by the slot's
-`tenureId` — so they clear on turnover, and do not come back if the same person
-retakes the name later. Set an avatar, lose the slot, and it is gone.
-
-Any key, including the ordinary ENS ones. The app shows the standard set
-because **text records are not enumerable**: `text(node, key)` answers about a
-key you already know and there is no `keys()`, on our resolver or on ENS's own,
+The app draws the standard key set because **text records are not enumerable**:
+`text(node, key)` answers about a key you already know and there is no `keys()`,
+on our resolver or on ENS's own,
 because the storage is a mapping and mappings cannot be walked. An indexer could
 rebuild the set from `TextChanged`; without one, asking about a known list is
 all any client can do — which is why the editor takes a key as free text.
@@ -432,12 +380,5 @@ Known gaps:
 - **`admin` is one key.** It can upgrade the beacon, which changes the code
   running under every curator's name. `transferAdmin` moves it to a multisig
   and that is the intended end state, not the current one.
-- **The unknown-type fallback has no test.** It works, and the seed used to
-  carry a record of a made-up type to prove it, which was more confusing than
-  it was worth. There is no TypeScript test runner in this repo yet, so for
-  now the claim rests on reading `parseSponsorRecord`.
-- **Enrichment depends on one index.** GeckoTerminal allows 30 anonymous
-  requests a minute. Enrichment spends one and never runs again, and the live
-  figures route caches — but a burst (seeding, say) will hit it, and a 429 now
-  fails the publish loudly rather than silently freezing a truncated address
-  into a record somebody paid for.
+- **Nothing tests the web app.** There is no TypeScript test runner in this
+  repo yet, so `apps/web` rests on `tsc` and on being used.

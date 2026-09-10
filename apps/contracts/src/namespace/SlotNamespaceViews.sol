@@ -37,19 +37,17 @@ abstract contract SlotNamespaceViews is SlotNamespaceBase {
     function listing()
         external
         view
-        returns (bytes32[] memory nodes, string[] memory labels, address[] memory slots, LabelKind[] memory kinds)
+        returns (bytes32[] memory nodes, string[] memory labels, address[] memory slots)
     {
         uint256 n = _slotted.length;
         nodes = new bytes32[](n);
         labels = new string[](n);
         slots = new address[](n);
-        kinds = new LabelKind[](n);
         for (uint256 i; i < n; ++i) {
             bytes32 node = _slotted[i];
             nodes[i] = node;
             labels[i] = labelOfNode[node];
             slots[i] = slotOfNode[node];
-            kinds[i] = kindOfNode[node];
         }
     }
 

@@ -30,6 +30,8 @@ ALICE=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 ALICE_PK=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 BOB=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
 BOB_PK=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+CAROL=0x90F79bf6EB2c4f870365E785982E1f101E93b906
+CAROL_PK=0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
 
 SLOT_FACTORY=0x14df7d78ef556A80F0AD3ede3F10F1e24f92E1cE
 ENS_VF=0x894bc9cC8ff1ad96B8a288C86A8C71D662C07780
@@ -42,8 +44,8 @@ ALL_ROLES=0x1111111111111111111111111111111111111111111111111111111111111111
 
 TAX_BPS=500
 MIN_DEPOSIT_SECONDS=604800
-# The run every sponsor is guaranteed, carried by the namespace's hook rather
-# than set per label. Without it a sponsor can be outbid minutes after paying
+# The tenure every holder is guaranteed, carried by the namespace's hook rather
+# than set per label. Without it a holder can be outbid minutes after paying
 # and the space they bought never runs.
 MIN_TENURE_HOOK=0xB1e68532Ba467b2310A931abcDD682E718426c9C
 MIN_TENURE_SECONDS=$(printf "0x%064x" 604800)
@@ -78,7 +80,7 @@ call() { cast call --rpc-url "$RPC" "$@"; }
 #
 # Clearing the code locally turns them back into the EOAs everyone assumes they
 # are. Local only, and invisible to anything but this chain.
-for a in "$DEPLOYER" "$ALICE" "$BOB" 0x90F79bf6EB2c4f870365E785982E1f101E93b906; do
+for a in "$DEPLOYER" "$ALICE" "$BOB" "$CAROL"; do
   cast rpc anvil_setCode "$a" 0x --rpc-url "$RPC" >/dev/null
 done
 
@@ -170,7 +172,7 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
 
   register_parent "$label" "$registry"
 
-  # `(label, kind, hook, hookData, permanent)` per label, as a tuple array.
+  # `(label, hook, hookData, permanent)` per label, as a tuple array.
   specs="[$(IFS=,; echo "$*")]"
 
   # Encoded first, then sent as raw calldata, and it has to be this way round:
@@ -179,7 +181,7 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   # not, so passing the names directly stored an address for one of them and the
   # name for the other. `cast calldata` does no such thing.
   data=$(cast calldata \
-    "open((address,bytes32,string,(address,address,address,address,bytes32,uint256,uint256,bool,bool),address,(string,uint8,address,bytes32,bool)[]))" \
+    "open((address,bytes32,string,(address,address,address,address,bytes32,uint256,uint256,bool,bool),address,(string,address,bytes32,bool)[]))" \
     "($ZERO,$node,$label.eth,$TERMS,$DEPLOYER,$specs)")
   send "$DEPLOYER_PK" "$NSF" "$data"
 
@@ -199,24 +201,22 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   echo "$ns"
 }
 
-# A `LabelSpec` tuple. Every space is SPONSORING (kind 1), never permanent, and
-# passes hook zero so it inherits the namespace's minimum tenure.
+# A `LabelSpec` tuple. Never permanent, and hook zero so the label inherits the
+# namespace's minimum tenure rather than carrying a policy of its own.
 spec() {                     # $1 = label
-  echo "($1,1,$ZERO,$ZERO32,false)"
+  echo "($1,$ZERO,$ZERO32,false)"
 }
 
 node_of() {                  # $1 = namespace, $2 = label
   cast keccak "$(cast concat-hex "$(call "$1" "parentNode()(bytes32)")" "$(cast keccak "$2")")"
 }
 
-# Written by the OCCUPANT, which is the only party that can. Pre-baked rather
-# than enriched here: enrichment is a publish-time network call, and a seed that
-# needed the index to be up would fail for reasons that have nothing to do
-# with the chain.
-set_record() {               # $1 = namespace, $2 = label, $3 = pk, $4 = json
+# Written by the OCCUPANT, which is the only party that can — and scoped to
+# their tenancy, so it goes with the name when somebody takes it.
+set_record() {               # $1 = namespace, $2 = label, $3 = pk, $4 = key, $5 = value
   local data
   data=$(cast calldata "setText(bytes32,string,string)" \
-    "$(node_of "$1" "$2")" "com.ethglobal.sponsor" "$4")
+    "$(node_of "$1" "$2")" "$4" "$5")
   send "$3" "$1" "$data"
 }
 
@@ -253,35 +253,53 @@ take() {                     # $1 = namespace, $2 = label, $3 = pk, $4 = who, $5
 
 # ── the one namespace ───────────────────────────────────────────────────────
 #
-# `ethglobal.eth`, with three sponsoring spaces under it. One name rather than
+# `l2beat.eth`, with three rentable subnames under it. One name rather than
 # three, because the point being demonstrated is what a namespace IS — a parent
-# with spaces on the market — and three of them said the same thing three times
-# while taking three times as long to seed.
+# with subnames on the market — and three of them said the same thing three
+# times while taking three times as long to seed.
 #
-# `sponsor-1..3` are deliberately plain. Names like `pool` or `press` invited
-# the reading that a space is typed, and it is not: any space can show any of
-# the payload kinds, which is exactly what these three do.
+# Lowercase, and not a stylistic choice: ENSIP-15 normalises labels to lower
+# case, so `l2Beat` is not a name that can exist. `l2beat` is.
+#
+# `base`, `rare`, `cool`, `fun` — short, ordinary words, the kind of subname
+# somebody actually wants. Four of them because three could not show a spread
+# and four can.
 
-echo "→ ethglobal.eth"
-ETHGLOBAL=$(open_namespace ethglobal "$(spec sponsor-1)" "$(spec sponsor-2)" "$(spec sponsor-3)")
+echo "→ l2beat.eth"
+L2BEAT=$(open_namespace l2beat "$(spec base)" "$(spec rare)" "$(spec cool)" "$(spec fun)")
 
 # ── what the namespace says about itself ────────────────────────────────────
 #
-# Read off ethglobal.com at seed time rather than pasted in here.
+# Their own ENS records where they have them, the site's meta tags where they
+# do not.
 #
-# `ethglobal.eth` resolves to an address on mainnet and carries no text records
-# at all — checked, not assumed — so there is no ENS profile to copy. What the
-# site serves in its own meta tags is the next most honest source, and it is the
-# same one `packages/sponsor` reads when somebody publishes a link.
+# `l2beat.eth` carries a real profile on mainnet — checked, not assumed — which
+# the name this seed used before did not. So it is copied rather than replaced
+# by a scraped substitute, which is also the more honest demonstration: these
+# are the records the name actually publishes. Read from the ENS registry on
+# mainnet on 2026-09-10:
 #
-# Fetched with a timeout and a fallback: a seed that cannot run without the
-# network would fail for reasons that have nothing to do with the chain, and
-# this is scaffolding, not a test of ethglobal.com's uptime.
+#   avatar        https://l2beat.com/ens-avatar.png
+#   url           https://l2beat.com
+#   com.twitter   https://twitter.com/l2beat
+#   com.github    https://github.com/l2beat
+#   description   unset
+#   header        unset
+#
+# Pasted rather than read at seed time, because the local chain is a SEPOLIA
+# fork and these live on MAINNET — fetching them would mean a second RPC to a
+# second network for four constants that change about never.
+#
+# `description` and `header` are the two ENS has nothing for, so those come off
+# l2beat.com's own meta tags instead. Fetched with a timeout and a fallback: a
+# seed that cannot run without the network would fail for reasons that have
+# nothing to do with the chain, and this is scaffolding, not a test of
+# l2beat.com's uptime.
 echo "→ profile"
 
 meta() {                     # $1 = property, $2 = fallback
   local html value
-  html=$(curl -sL --max-time 10 -A "Mozilla/5.0" https://ethglobal.com 2>/dev/null || true)
+  html=$(curl -sL --max-time 10 -A "Mozilla/5.0" https://l2beat.com 2>/dev/null || true)
   value=$(printf '%s' "$html" \
     | grep -oiE "<meta[^>]+(property|name)=\"$1\"[^>]*>" \
     | grep -oiE 'content="[^"]*"' \
@@ -289,41 +307,64 @@ meta() {                     # $1 = property, $2 = fallback
   printf '%s' "${value:-$2}"
 }
 
-ETHGLOBAL_TITLE=$(meta "og:title" "ETHGlobal")
-ETHGLOBAL_DESC=$(meta "og:description" "Bringing developers onchain to build the future of the internet.")
-ETHGLOBAL_IMAGE=$(meta "og:image" "https://ethglobal.com/og.png")
+L2BEAT_TITLE=$(meta "og:title" "L2BEAT")
+L2BEAT_DESC=$(meta "og:description" "Track the Ethereum ecosystem in one view: L2s and Ethereum metrics, interoperability flows, privacy protocols and ZK provers, ongoing anomalies, new projects, and the latest additions to L2BEAT.")
+L2BEAT_IMAGE=$(meta "og:image" "https://l2beat.com/static/meta-images/home/opengraph-image.e5c4c254.png")
 
-echo "     $ETHGLOBAL_TITLE — $ETHGLOBAL_DESC"
+echo "     $L2BEAT_TITLE — $L2BEAT_DESC"
 
-set_parent_record "$ETHGLOBAL" avatar      "https://ethglobal.com/favicon.ico"
-set_parent_record "$ETHGLOBAL" header      "$ETHGLOBAL_IMAGE"
-set_parent_record "$ETHGLOBAL" description "$ETHGLOBAL_DESC"
-set_parent_record "$ETHGLOBAL" url         "https://ethglobal.com"
+set_parent_record "$L2BEAT" avatar      "https://l2beat.com/ens-avatar.png"
+set_parent_record "$L2BEAT" header      "$L2BEAT_IMAGE"
+set_parent_record "$L2BEAT" description "$L2BEAT_DESC"
+set_parent_record "$L2BEAT" url         "https://l2beat.com"
+
+# The two links the profile editor offers that nothing else here exercised, so
+# the demo arrives with them set rather than blank.
+set_parent_record "$L2BEAT" com.twitter "https://twitter.com/l2beat"
+set_parent_record "$L2BEAT" com.github  "https://github.com/l2beat"
 
 # ── occupancy ───────────────────────────────────────────────────────────────
 #
-# Two of the three held, one left vacant. An empty space is the state a visitor
-# is most likely to arrive on and the only one from which the buy flow can be
-# demonstrated, so the seed has to leave one.
+# ── and what they are worth ──────────────────────────────────────────────────
+#
+# The spread is the whole demonstration, and it has to be wide to read as one.
+# Every name here was opened on IDENTICAL terms — same tax rate, same minimum
+# tenure, same hook — so nothing in the contract knows that `base` is worth ten
+# times `rare`. That number is not a property of the name. It is what the person
+# holding it decided to expose themselves to, and the only reason it is true is
+# that anybody may take the name at it.
+#
+# Which is also why the ordering is not by length. `fun` is the shortest label
+# here and it is the one nobody has taken; `base` is the one an L2 index has
+# obvious demand for. Rarity is a story people tell about names — demand is what
+# actually prices them, and a seed that ranked these by character count would be
+# demonstrating the story rather than the mechanism.
+#
+# `fun` is left vacant on purpose. An empty name is the state a visitor is most
+# likely to arrive on and the only one from which the buy flow can be shown, so
+# the seed has to leave one — and leaving the cheapest-looking one means trying
+# it costs a visitor the least.
 echo "→ occupancy"
-take "$ETHGLOBAL" sponsor-1 "$ALICE_PK" "$ALICE" $((900 * USDC))
-take "$ETHGLOBAL" sponsor-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
+take "$L2BEAT" base "$ALICE_PK" "$ALICE" $((2400 * USDC))
+take "$L2BEAT" cool "$BOB_PK"   "$BOB"   $((600 * USDC))
+take "$L2BEAT" rare "$CAROL_PK" "$CAROL" $((250 * USDC))
 
-# ── what the spaces are showing ─────────────────────────────────────────────
+# ── what the occupants have published ───────────────────────────────────────
 #
-# Two different payload kinds on two identical spaces, which is the argument:
-# nothing about a space decides what it shows, only its occupant does.
-#
-# The metadata is what `packages/sponsor` actually returned for these, pasted
-# rather than enriched here — enrichment is a publish-time network call against
-# an index that rate limits anonymous callers at 30 a minute.
+# Ordinary ENS text records, written by whoever holds the name. They are keyed
+# by tenure, so taking a name from someone does not inherit what they wrote —
+# which is the part worth seeing on screen.
 echo "→ records"
 
-# an ordinary page
-set_record "$ETHGLOBAL" sponsor-1 "$ALICE_PK" '{"v":1,"type":"url","data":{"url":"https://splits.org"},"metadata":{"name":"Splits | Process revenue, move money, run operations globally","image":"https://splits.org/logo_compressed.svg","tagline":"Process revenue, move money, and run operations instantly, anywhere in the world. Treasury and personal accounts, agent-ready tools, and ope","host":"splits.org"}}'
+set_record "$L2BEAT" base "$ALICE_PK" url "https://base.org"
+set_record "$L2BEAT" base "$ALICE_PK" description "The L2 this name points at, for as long as Alice keeps paying for it."
 
-# a token
-set_record "$ETHGLOBAL" sponsor-2 "$BOB_PK" '{"v":1,"type":"token","data":{"chainId":8453,"address":"0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b"},"metadata":{"name":"BankrCoin","image":"https://coin-images.coingecko.com/coins/images/52626/large/bankr-static.png?1736405365","tagline":"BNKR on Base","symbol":"BNKR","chainLabel":"Base"}}'
+set_record "$L2BEAT" cool "$BOB_PK" url "https://bankr.bot"
+set_record "$L2BEAT" cool "$BOB_PK" com.twitter "bankrbot"
+
+# `rare` is held but says nothing. Occupying a name and publishing under it are
+# separate acts, and a seed where every held name carried records would suggest
+# the second follows from the first.
 
 # The app's address book, regenerated from the ledgers this deploy just wrote
 # and the constants in `Addresses.sol`. Every chain with a ledger gets an entry,
@@ -333,4 +374,4 @@ set_record "$ETHGLOBAL" sponsor-2 "$BOB_PK" '{"v":1,"type":"token","data":{"chai
 echo
 echo "  namespace factory  $NSF"
 echo "  resolver           $RESOLVER"
-echo "  ethglobal.eth      $ETHGLOBAL"
+echo "  l2beat.eth         $L2BEAT"

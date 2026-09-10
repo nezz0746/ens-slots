@@ -32,7 +32,6 @@ const LABEL_SPEC = {
   type: "tuple[]",
   components: [
     { name: "label", type: "string" },
-    { name: "kind", type: "uint8" },
     { name: "hook", type: "address" },
     { name: "hookData", type: "bytes32" },
     { name: "permanent", type: "bool" },
@@ -139,23 +138,6 @@ export const namespaceAbi = [
   },
   {
     type: "function",
-    name: "kindOfNode",
-    stateMutability: "view",
-    inputs: [{ name: "node", type: "bytes32" }],
-    outputs: [{ type: "uint8" }],
-  },
-  {
-    type: "function",
-    name: "setKind",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "label", type: "string" },
-      { name: "kind", type: "uint8" },
-    ],
-    outputs: [],
-  },
-  {
-    type: "function",
     name: "resolver",
     stateMutability: "view",
     inputs: [],
@@ -177,7 +159,6 @@ export const namespaceAbi = [
       { name: "nodes", type: "bytes32[]" },
       { name: "labels", type: "string[]" },
       { name: "slots", type: "address[]" },
-      { name: "kinds", type: "uint8[]" },
     ],
   },
   {
@@ -263,7 +244,6 @@ export const namespaceAbi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "label", type: "string" },
-      { name: "kind", type: "uint8" },
       { name: "hook", type: "address" },
       { name: "hookData", type: "bytes32" },
       { name: "permanent_", type: "bool" },

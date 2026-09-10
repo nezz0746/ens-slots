@@ -5,7 +5,6 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 
 import {SepoliaAddresses} from "../src/Addresses.sol";
 import {SlotNamespace} from "../src/SlotNamespace.sol";
-import {SlotNamespaceBase} from "../src/namespace/SlotNamespaceBase.sol";
 import {SlotNamespaceFactory} from "../src/SlotNamespaceFactory.sol";
 import {SlotNamespaceResolver} from "../src/SlotNamespaceResolver.sol";
 import {IVerifiableFactory} from "../src/interfaces/IENSv2.sol";
@@ -56,12 +55,12 @@ contract UpgradesTest is ForkBase {
      *      is not its registry and answers for names it never opened.
      */
     function test_StorageSurvivesABeaconUpgrade() public {
-        (address slot,) = _slot("sponsor", address(0), false, SlotNamespaceBase.LabelKind.SPONSORING);
+        (address slot,) = _slot("alpha", address(0), false);
         _slot("links", address(0), true);
         _take(slot, alice, 1 ether);
 
         vm.prank(alice);
-        namespace.setText(_node("sponsor"), "url", "https://example.com");
+        namespace.setText(_node("alpha"), "url", "https://example.com");
         vm.prank(owner);
         namespace.setParentText("avatar", "https://example.com/pfp.png");
 
@@ -71,7 +70,7 @@ contract UpgradesTest is ForkBase {
         string memory nameBefore = namespace.parentName();
         address ownerBefore = namespace.owner();
         address resolverBefore = namespace.resolver();
-        (bytes32[] memory nodesBefore, string[] memory labelsBefore, address[] memory slotsBefore,) =
+        (bytes32[] memory nodesBefore, string[] memory labelsBefore, address[] memory slotsBefore) =
             namespace.listing();
 
         address v2 = address(new SlotNamespaceV2());
@@ -88,18 +87,16 @@ contract UpgradesTest is ForkBase {
         (
             bytes32[] memory nodes,
             string[] memory labels,
-            address[] memory slots,
-            SlotNamespaceBase.LabelKind[] memory kinds
+            address[] memory slots
         ) = namespace.listing();
         assertEq(nodes.length, nodesBefore.length, "listing length");
         assertEq(nodes[0], nodesBefore[0], "listing nodes");
         assertEq(labels[0], labelsBefore[0], "listing labels");
         assertEq(slots[0], slotsBefore[0], "listing slots");
-        assertEq(uint8(kinds[0]), uint8(SlotNamespaceBase.LabelKind.SPONSORING), "listing kinds");
 
-        assertEq(namespace.textOf(_node("sponsor"), "url"), "https://example.com", "the occupant's record");
+        assertEq(namespace.textOf(_node("alpha"), "url"), "https://example.com", "the occupant's record");
         assertEq(namespace.textOf(PARENT_NODE, "avatar"), "https://example.com/pfp.png", "the parent's record");
-        assertEq(namespace.addrOf(_node("sponsor")), alice, "and alice still holds the name");
+        assertEq(namespace.addrOf(_node("alpha")), alice, "and alice still holds the name");
         assertTrue(namespace.permanent(_node("links")), "a permanent promise stayed permanent");
     }
 
@@ -217,7 +214,7 @@ contract UpgradesTest is ForkBase {
 
     /// @notice And the resolver keeps answering, from the same address.
     function test_TheResolverKeepsAnsweringAcrossAnUpgrade() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
         address before = address(resolver);
@@ -231,7 +228,7 @@ contract UpgradesTest is ForkBase {
         assertEq(address(resolver.factory()), address(factory));
 
         bytes memory answer = resolver.resolve(
-            _dnsEncode("sponsor", "slotsdemo", "eth"), abi.encodeWithSelector(bytes4(0x3b3b57de), bytes32(0))
+            _dnsEncode("alpha", "slotsdemo", "eth"), abi.encodeWithSelector(bytes4(0x3b3b57de), bytes32(0))
         );
         assertEq(abi.decode(answer, (address)), alice);
     }

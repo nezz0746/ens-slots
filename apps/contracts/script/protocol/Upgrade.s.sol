@@ -129,7 +129,7 @@ contract Upgrade is Config {
         if (factory.count() == 0) return (bytes32(0), false);
 
         SlotNamespace ns = SlotNamespace(factory.at(0));
-        (bytes32[] memory nodes, string[] memory labels, address[] memory slots,) = ns.listing();
+        (bytes32[] memory nodes, string[] memory labels, address[] memory slots) = ns.listing();
 
         return (
             keccak256(
