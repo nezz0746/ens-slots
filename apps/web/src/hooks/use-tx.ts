@@ -211,6 +211,8 @@ export function useBatch() {
  * named errors precisely so a UI can say what went wrong.
  */
 function readReason(e: unknown): string {
+  // TEMP DIAGNOSTIC
+  console.error("RAW_TX_ERROR", JSON.stringify({ short: (e as any)?.shortMessage, msg: (e as any)?.message?.slice(0, 900), name: (e as any)?.name, cause: (e as any)?.cause?.message?.slice(0,400) }));
   const err = e as {
     cause?: { data?: { errorName?: string; args?: readonly unknown[] } };
     shortMessage?: string;
