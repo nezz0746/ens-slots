@@ -1,19 +1,7 @@
 "use client";
 
-import {
-  RECORD_KEY,
-  parseSponsorRecord,
-  type SponsorRecord,
-} from "@ens-slots/sponsor";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  Send,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Send } from "lucide-react";
 import {
   Children,
   useEffect,
@@ -24,12 +12,10 @@ import {
 } from "react";
 import { useAccount } from "wagmi";
 
-import { SponsorCard } from "@/components/sponsor-card";
-import { SponsorEditor } from "@/components/sponsor-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Namespace, Subname } from "@/hooks/use-namespaces";
-import { useSponsorRecord, useTextRecords } from "@/hooks/use-sponsor";
+import { useTextRecords } from "@/hooks/use-records";
 import { useTx } from "@/hooks/use-tx";
 import { namespaceAbi } from "@/lib/abis";
 import { shortAddress } from "@/lib/format";
@@ -60,13 +46,6 @@ export function NameDetails({
     state.occupant.toLowerCase() === address.toLowerCase();
   const vacant = !state || state.isVacant;
 
-  const { data: sponsor } = useSponsorRecord({
-    name,
-    namespace: namespace.address,
-    node: subname.node,
-  });
-  const record = sponsor?.record ?? null;
-
   return (
     <div className="space-y-4">
       <header className="space-y-1">
@@ -96,9 +75,6 @@ export function NameDetails({
         node={subname.node}
         occupant={vacant ? undefined : state?.occupant}
         canEdit={isOccupant}
-        record={record}
-        raw={sponsor?.raw}
-        via={sponsor?.via}
       />
     </div>
   );
@@ -117,10 +93,9 @@ export function NameDetails({
  *
  * ── One pane sliding over another ─────────────────────────────────────────
  *
- * The editor takes the whole column rather than expanding a row, because the
- * fields for a sponsor payload are taller than the list itself and pushing the
- * rest down loses the reader's place. Sliding keeps the list one gesture away
- * and makes clear the editor is a detour rather than a new screen.
+ * The editor takes the whole column rather than expanding a row: pushing the
+ * rest of the list down loses the reader's place. Sliding keeps the list one
+ * gesture away and makes clear the editor is a detour, not a new screen.
  */
 function Records({
   name,
@@ -128,18 +103,12 @@ function Records({
   node,
   occupant,
   canEdit,
-  record,
-  raw,
-  via,
 }: {
   name: string;
   namespace: `0x${string}`;
   node: `0x${string}`;
   occupant?: `0x${string}`;
   canEdit: boolean;
-  record?: SponsorRecord | null;
-  raw?: string;
-  via?: "ens" | "contract";
 }) {
   const { data: texts } = useTextRecords({ name });
   const { send, pending, error } = useTx();
@@ -177,12 +146,8 @@ function Records({
   const onChain: Record<string, string> = Object.fromEntries(
     (texts ?? []).map((r) => [r.key, r.value]),
   );
-  onChain[RECORD_KEY] = record ? JSON.stringify(record) : "";
 
-  const rows = [
-    ...(texts ?? []).map((r) => r.key),
-    RECORD_KEY,
-  ];
+  const rows = (texts ?? []).map((r) => r.key);
 
   const valueOf = (key: string) => drafts[key] ?? onChain[key] ?? "";
   const changed = Object.keys(drafts);
@@ -199,8 +164,6 @@ function Records({
     // Re-read now rather than on the next poll, so the list stops showing
     // "changed" badges for values the chain already agrees with.
     await queryClient.invalidateQueries({ queryKey: ["text-records"] });
-    await queryClient.invalidateQueries({ queryKey: ["sponsor"] });
-    await queryClient.invalidateQueries({ queryKey: ["sponsor-records"] });
     setDrafts({});
   }
 
@@ -217,7 +180,6 @@ function Records({
           className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line"
         >
           {rows.map((key) => {
-            const isSponsor = key === RECORD_KEY;
             const value = valueOf(key);
             const dirty = key in drafts;
             return (
@@ -226,8 +188,6 @@ function Records({
                 label={key}
                 value={value}
                 dirty={dirty}
-                sponsor={isSponsor}
-                record={isSponsor ? draftedRecord(value, record) : undefined}
                 onClick={canEdit ? () => setEditing(key) : undefined}
               />
             );
@@ -240,13 +200,6 @@ function Records({
           <FieldEditor
             recordKey={editing}
             value={valueOf(editing)}
-            current={
-              editing === RECORD_KEY
-                ? draftedRecord(valueOf(editing), record)
-                : undefined
-            }
-            raw={editing === RECORD_KEY ? raw : undefined}
-            via={via}
             onCancel={() => setEditing(null)}
             onSave={(next) => {
               setDrafts((d) =>
@@ -288,12 +241,6 @@ function Records({
       )}
     </section>
   );
-}
-
-/** A staged sponsor payload, parsed — falling back to what is published. */
-function draftedRecord(value: string, published?: SponsorRecord | null) {
-  if (!value) return null;
-  return parseSponsorRecord(value) ?? published ?? null;
 }
 
 /**
@@ -430,13 +377,11 @@ function Slider({
   );
 }
 
-/** One row of the list. The sponsor one draws its payload rather than a string. */
+/** One row of the list. */
 function RecordRow({
   label,
   value,
   dirty,
-  sponsor,
-  record,
   mono,
   empty = "not set",
   onClick,
@@ -444,8 +389,6 @@ function RecordRow({
   label: string;
   value: string;
   dirty?: boolean;
-  sponsor?: boolean;
-  record?: SponsorRecord | null;
   mono?: boolean;
   empty?: string;
   onClick?: () => void;
@@ -454,36 +397,24 @@ function RecordRow({
     <div
       className={cn(
         "flex w-full items-center gap-3 px-3 py-2 text-left",
-        sponsor && "bg-brand-soft/40",
         onClick && "transition-colors hover:bg-canvas",
       )}
     >
-      {/* 128px: `com.ethglobal.sponsor` measures 122 at this size and weight,
-          and it is both the longest key in the profile and the one nobody
-          should have to hover to read. */}
-      <dt
-        title={label}
-        className={cn(
-          "w-32 shrink-0 truncate text-[11px]",
-          sponsor ? "font-medium text-brand-ink" : "text-ink-faint",
-        )}
-      >
+      {/* Wide enough for `description` and `com.twitter`, the longest keys
+          in the profile, so nothing has to be hovered to be read. */}
+      <dt title={label} className="w-32 shrink-0 truncate text-[11px] text-ink-faint">
         {label}
       </dt>
       <dd className="min-w-0 flex-1">
-        {sponsor && record ? (
-          <SponsorCard record={record} compact />
-        ) : (
-          <span
-            className={cn(
-              "block truncate text-[11px]",
-              !value && "text-ink-faint",
-              mono && value && "font-mono",
-            )}
-          >
-            {value || empty}
-          </span>
-        )}
+        <span
+          className={cn(
+            "block truncate text-[11px]",
+            !value && "text-ink-faint",
+            mono && value && "font-mono",
+          )}
+        >
+          {value || empty}
+        </span>
       </dd>
       {dirty && (
         <span className="shrink-0 rounded px-1 py-px text-[9px] font-semibold tracking-wide text-warn uppercase">
@@ -512,17 +443,11 @@ function RecordRow({
 function FieldEditor({
   recordKey,
   value,
-  current,
-  raw,
-  via,
   onSave,
   onCancel,
 }: {
   recordKey: string;
   value: string;
-  current?: SponsorRecord | null;
-  raw?: string;
-  via?: "ens" | "contract";
   onSave: (next: string) => void;
   onCancel: () => void;
 }) {
@@ -556,25 +481,18 @@ function FieldEditor({
         <code className="truncate text-[10px] text-ink-faint">{recordKey}</code>
       </div>
 
-      {recordKey === RECORD_KEY ? (
-        <>
-          <SponsorEditor current={current} onStage={onSave} />
-          {raw && <OnChain raw={raw} via={via} />}
-        </>
-      ) : (
-        <div className="space-y-2">
-          <Input
-            ref={field}
-            value={draft}
-            placeholder={PLACEHOLDER[recordKey] ?? "value"}
-            onChange={(e) => setDraft(e.target.value)}
-            className="h-9"
-          />
-          <Button size="sm" className="w-full" onClick={() => onSave(draft)}>
-            Use this
-          </Button>
-        </div>
-      )}
+      <div className="space-y-2">
+        <Input
+          ref={field}
+          value={draft}
+          placeholder={PLACEHOLDER[recordKey] ?? "value"}
+          onChange={(e) => setDraft(e.target.value)}
+          className="h-9"
+        />
+        <Button size="sm" className="w-full" onClick={() => onSave(draft)}>
+          Use this
+        </Button>
+      </div>
     </div>
   );
 }
@@ -590,53 +508,3 @@ const PLACEHOLDER: Record<string, string> = {
   "com.github": "your handle",
   "com.twitter": "your handle, without the @",
 };
-
-/**
- * The bytes as any other client sees them.
- *
- * Kept because "resolves through plain ENS" is a claim, and a claim about
- * interoperability is worth nothing unless the reader can check it. This is
- * the exact string `getEnsText` returns — no SDK in the path.
- */
-function OnChain({ raw, via }: { raw: string; via?: "ens" | "contract" }) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  return (
-    <div className="space-y-1 border-t border-line-soft pt-2">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1 text-[10px] text-ink-faint transition-colors hover:text-ink"
-      >
-        <ChevronDown
-          className={cn("size-3 transition-transform", !open && "-rotate-90")}
-        />
-        {new Blob([raw]).size} bytes ·{" "}
-        {via === "ens" ? "resolved through ENS" : "read from the contract"}
-      </button>
-      {open && (
-        <div className="relative">
-          <pre className="max-h-48 overflow-auto rounded-lg border border-line bg-canvas p-2 text-[10px] leading-relaxed break-all whitespace-pre-wrap">
-            {JSON.stringify(JSON.parse(raw), null, 2)}
-          </pre>
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard?.writeText(raw);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1200);
-            }}
-            className="absolute top-1.5 right-1.5 rounded-md border border-line bg-surface p-1 text-ink-faint transition-colors hover:text-ink"
-          >
-            {copied ? (
-              <Check className="size-3 text-good" />
-            ) : (
-              <Copy className="size-3" />
-            )}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}

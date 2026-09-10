@@ -179,7 +179,7 @@ abstract contract ForkBase is Test {
             );
     }
 
-    /// @dev `sponsor.slotsdemo.eth` → `\x07sponsor\x09slotsdemo\x03eth\x00`
+    /// @dev `alpha.slotsdemo.eth` → `\x05alpha\x09slotsdemo\x03eth\x00`
     function _dnsEncode(string memory a, string memory b, string memory c) internal pure returns (bytes memory) {
         return
             abi.encodePacked(uint8(bytes(a).length), a, uint8(bytes(b).length), b, uint8(bytes(c).length), c, uint8(0));

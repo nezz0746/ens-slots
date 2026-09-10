@@ -20,13 +20,6 @@ import { namespaceAbi } from "@/lib/abis";
  * `header` rather than `banner`, because `header` is the key ENS's own manager
  * app writes for exactly this. The word on the button says banner; the key on
  * the chain is the one everyone else already looks under.
- *
- * ── Which is different from the sponsor record, deliberately ──────────────
- *
- * One level down, a sponsoring space carries `com.ethglobal.sponsor` — a
- * structured payload under a custom key, because "a token, on this chain, at
- * this address" is not a thing ENS has a key for. A profile is, so it doesn't
- * get one.
  */
 export const PROFILE_KEYS = ["avatar", "header", "description", "url"] as const;
 
@@ -83,7 +76,7 @@ export function hasProfile(p: Profile | undefined): boolean {
  *
  * ── Read through ENS, with the contract as a stated fallback ──────────────
  *
- * The same argument `useSponsorRecord` makes, for the same reason. This app
+ * The same argument `useTextRecords` makes, for the same reason. This app
  * holds the namespace's address and ABI and could call `parentTextOf` directly
  * — and doing so would demonstrate nothing. The claim is that these are
  * ordinary ENS records that any client can read, so the app reads them the way

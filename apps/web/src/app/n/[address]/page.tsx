@@ -13,7 +13,6 @@ import { RootProfileEditor } from "@/components/root-profile-editor";
 import { SlotLabelForm } from "@/components/slot-label-form";
 import { SlotPanel } from "@/components/slot-panel";
 import { useNamespace } from "@/hooks/use-namespaces";
-import { useSponsorRecords } from "@/hooks/use-sponsor";
 import { formatAmount, shortAddress } from "@/lib/format";
 import { describeRunway, runwayTone, TONE_DOT } from "@/lib/runway";
 import { cn } from "@/lib/utils";
@@ -43,13 +42,6 @@ export default function NamespacePage({
   const { namespace, isLoading } = useNamespace(address as `0x${string}`);
   const { address: me } = useAccount();
   const [selected, setSelected] = useState<string | null>(null);
-
-  // What each space is showing, so a row can say so without being opened.
-  const { data: records } = useSponsorRecords({
-    parentName: namespace?.parentName ?? "",
-    nodes: namespace?.subnames.map((s) => ({ node: s.node, label: s.label })) ?? [],
-    enabled: !!namespace,
-  });
 
   // Open on something rather than an empty panel — the first available name if
   // there is one, since that is what a visitor is here for.
@@ -151,14 +143,6 @@ export default function NamespacePage({
                         .{namespace.parentName}
                       </span>
                     </span>
-                    {/* What the space is SHOWING. Every space here is a
-                        sponsoring space, so the kind said nothing; "pool" or
-                        "post" tells you what you are actually looking at. */}
-                    {records?.[s.node] && (
-                      <span className="shrink-0 rounded border border-brand-soft bg-brand-soft px-1 py-px text-[9px] font-semibold tracking-wide text-brand-ink uppercase">
-                        {records[s.node]?.type}
-                      </span>
-                    )}
                   </div>
                   <div className="mt-0.5 truncate text-[11px] text-ink-faint">
                     {vacant

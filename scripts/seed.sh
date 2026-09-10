@@ -42,8 +42,8 @@ ALL_ROLES=0x1111111111111111111111111111111111111111111111111111111111111111
 
 TAX_BPS=500
 MIN_DEPOSIT_SECONDS=604800
-# The run every sponsor is guaranteed, carried by the namespace's hook rather
-# than set per label. Without it a sponsor can be outbid minutes after paying
+# The tenure every holder is guaranteed, carried by the namespace's hook rather
+# than set per label. Without it a holder can be outbid minutes after paying
 # and the space they bought never runs.
 MIN_TENURE_HOOK=0xB1e68532Ba467b2310A931abcDD682E718426c9C
 MIN_TENURE_SECONDS=$(printf "0x%064x" 604800)
@@ -170,7 +170,7 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
 
   register_parent "$label" "$registry"
 
-  # `(label, kind, hook, hookData, permanent)` per label, as a tuple array.
+  # `(label, hook, hookData, permanent)` per label, as a tuple array.
   specs="[$(IFS=,; echo "$*")]"
 
   # Encoded first, then sent as raw calldata, and it has to be this way round:
@@ -179,7 +179,7 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   # not, so passing the names directly stored an address for one of them and the
   # name for the other. `cast calldata` does no such thing.
   data=$(cast calldata \
-    "open((address,bytes32,string,(address,address,address,address,bytes32,uint256,uint256,bool,bool),address,(string,uint8,address,bytes32,bool)[]))" \
+    "open((address,bytes32,string,(address,address,address,address,bytes32,uint256,uint256,bool,bool),address,(string,address,bytes32,bool)[]))" \
     "($ZERO,$node,$label.eth,$TERMS,$DEPLOYER,$specs)")
   send "$DEPLOYER_PK" "$NSF" "$data"
 
@@ -199,24 +199,22 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   echo "$ns"
 }
 
-# A `LabelSpec` tuple. Every space is SPONSORING (kind 1), never permanent, and
-# passes hook zero so it inherits the namespace's minimum tenure.
+# A `LabelSpec` tuple. Never permanent, and hook zero so the label inherits the
+# namespace's minimum tenure rather than carrying a policy of its own.
 spec() {                     # $1 = label
-  echo "($1,1,$ZERO,$ZERO32,false)"
+  echo "($1,$ZERO,$ZERO32,false)"
 }
 
 node_of() {                  # $1 = namespace, $2 = label
   cast keccak "$(cast concat-hex "$(call "$1" "parentNode()(bytes32)")" "$(cast keccak "$2")")"
 }
 
-# Written by the OCCUPANT, which is the only party that can. Pre-baked rather
-# than enriched here: enrichment is a publish-time network call, and a seed that
-# needed the index to be up would fail for reasons that have nothing to do
-# with the chain.
-set_record() {               # $1 = namespace, $2 = label, $3 = pk, $4 = json
+# Written by the OCCUPANT, which is the only party that can — and scoped to
+# their tenancy, so it goes with the name when somebody takes it.
+set_record() {               # $1 = namespace, $2 = label, $3 = pk, $4 = key, $5 = value
   local data
   data=$(cast calldata "setText(bytes32,string,string)" \
-    "$(node_of "$1" "$2")" "com.ethglobal.sponsor" "$4")
+    "$(node_of "$1" "$2")" "$4" "$5")
   send "$3" "$1" "$data"
 }
 
@@ -253,20 +251,19 @@ take() {                     # $1 = namespace, $2 = label, $3 = pk, $4 = who, $5
 
 # ── the one namespace ───────────────────────────────────────────────────────
 #
-# `l2beat.eth`, with three sponsoring spaces under it. One name rather than
+# `l2beat.eth`, with three rentable subnames under it. One name rather than
 # three, because the point being demonstrated is what a namespace IS — a parent
-# with spaces on the market — and three of them said the same thing three times
-# while taking three times as long to seed.
+# with subnames on the market — and three of them said the same thing three
+# times while taking three times as long to seed.
 #
 # Lowercase, and not a stylistic choice: ENSIP-15 normalises labels to lower
 # case, so `l2Beat` is not a name that can exist. `l2beat` is.
 #
-# `sponsor-1..3` are deliberately plain. Names like `pool` or `press` invited
-# the reading that a space is typed, and it is not: any space can show any of
-# the payload kinds, which is exactly what these three do.
+# `slot-1..3` are deliberately plain. A namespace does not care what its labels
+# are for, and a name like `press` or `pool` would suggest it does.
 
 echo "→ l2beat.eth"
-L2BEAT=$(open_namespace l2beat "$(spec sponsor-1)" "$(spec sponsor-2)" "$(spec sponsor-3)")
+L2BEAT=$(open_namespace l2beat "$(spec slot-1)" "$(spec slot-2)" "$(spec slot-3)")
 
 # ── what the namespace says about itself ────────────────────────────────────
 #
@@ -291,10 +288,10 @@ L2BEAT=$(open_namespace l2beat "$(spec sponsor-1)" "$(spec sponsor-2)" "$(spec s
 # second network for four constants that change about never.
 #
 # `description` and `header` are the two ENS has nothing for, so those come off
-# l2beat.com's own meta tags — the same source `packages/sponsor` reads when
-# somebody publishes a link. Fetched with a timeout and a fallback: a seed that
-# cannot run without the network would fail for reasons that have nothing to do
-# with the chain, and this is scaffolding, not a test of l2beat.com's uptime.
+# l2beat.com's own meta tags instead. Fetched with a timeout and a fallback: a
+# seed that cannot run without the network would fail for reasons that have
+# nothing to do with the chain, and this is scaffolding, not a test of
+# l2beat.com's uptime.
 echo "→ profile"
 
 meta() {                     # $1 = property, $2 = fallback
@@ -325,28 +322,25 @@ set_parent_record "$L2BEAT" com.github  "https://github.com/l2beat"
 
 # ── occupancy ───────────────────────────────────────────────────────────────
 #
-# Two of the three held, one left vacant. An empty space is the state a visitor
+# Two of the three held, one left vacant. An empty name is the state a visitor
 # is most likely to arrive on and the only one from which the buy flow can be
 # demonstrated, so the seed has to leave one.
 echo "→ occupancy"
-take "$L2BEAT" sponsor-1 "$ALICE_PK" "$ALICE" $((900 * USDC))
-take "$L2BEAT" sponsor-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
+take "$L2BEAT" slot-1 "$ALICE_PK" "$ALICE" $((900 * USDC))
+take "$L2BEAT" slot-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
 
-# ── what the spaces are showing ─────────────────────────────────────────────
+# ── what the occupants have published ───────────────────────────────────────
 #
-# Two different payload kinds on two identical spaces, which is the argument:
-# nothing about a space decides what it shows, only its occupant does.
-#
-# The metadata is what `packages/sponsor` actually returned for these, pasted
-# rather than enriched here — enrichment is a publish-time network call against
-# an index that rate limits anonymous callers at 30 a minute.
+# Ordinary ENS text records, written by whoever holds the name. They are keyed
+# by tenure, so taking a name from someone does not inherit what they wrote —
+# which is the part worth seeing on screen.
 echo "→ records"
 
-# an ordinary page
-set_record "$L2BEAT" sponsor-1 "$ALICE_PK" '{"v":1,"type":"url","data":{"url":"https://splits.org"},"metadata":{"name":"Splits | Process revenue, move money, run operations globally","image":"https://splits.org/logo_compressed.svg","tagline":"Process revenue, move money, and run operations instantly, anywhere in the world. Treasury and personal accounts, agent-ready tools, and ope","host":"splits.org"}}'
+set_record "$L2BEAT" slot-1 "$ALICE_PK" url "https://splits.org"
+set_record "$L2BEAT" slot-1 "$ALICE_PK" description "Process revenue, move money, run operations globally."
 
-# a token
-set_record "$L2BEAT" sponsor-2 "$BOB_PK" '{"v":1,"type":"token","data":{"chainId":8453,"address":"0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b"},"metadata":{"name":"BankrCoin","image":"https://coin-images.coingecko.com/coins/images/52626/large/bankr-static.png?1736405365","tagline":"BNKR on Base","symbol":"BNKR","chainLabel":"Base"}}'
+set_record "$L2BEAT" slot-2 "$BOB_PK" url "https://bankr.bot"
+set_record "$L2BEAT" slot-2 "$BOB_PK" com.twitter "bankrbot"
 
 # The app's address book, regenerated from the ledgers this deploy just wrote
 # and the constants in `Addresses.sol`. Every chain with a ledger gets an entry,

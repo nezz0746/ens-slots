@@ -16,9 +16,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@ens-slots/sponsor':
-        specifier: workspace:*
-        version: link:../../packages/sponsor
       '@tanstack/react-query':
         specifier: ^5.102.8
         version: 5.102.8(react@19.2.8)
@@ -71,16 +68,6 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
-
-  packages/sponsor:
-    dependencies:
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
-    devDependencies:
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
 
 packages:
 
@@ -1431,11 +1418,6 @@ packages:
 
   turbo@2.10.12:
     resolution: {integrity: sha512-AswgMPnpOoaVZHrrSBejETzEbuIA69OVGwfkHwfrY0A23VjWXBANzgq9+OymWOHAIArB7D1+1z498WY8fGg1Jw==}
-    hasBin: true
-
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
-    engines: {node: '>=14.17'}
     hasBin: true
 
   typescript@7.0.2:
@@ -3680,8 +3662,6 @@ snapshots:
       '@turbo/linux-arm64': 2.10.12
       '@turbo/windows-64': 2.10.12
       '@turbo/windows-arm64': 2.10.12
-
-  typescript@5.9.3: {}
 
   typescript@7.0.2:
     optionalDependencies:

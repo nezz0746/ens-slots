@@ -83,11 +83,11 @@ export default function RegisterPage() {
   const [label, setLabel] = useState("");
   const [tax, setTax] = useState("5");
   /**
-   * The run every sponsor is guaranteed.
+   * The tenure every holder is guaranteed.
    *
-   * A term of the market rather than a per-label option: without it a sponsor
-   * can be outbid ten minutes after paying, and the space they bought never
-   * ran. It reaches every slot through the namespace's terms, as the minimum
+   * A term of the market rather than a per-label option: without it a holder
+   * can be outbid ten minutes after paying, and the name they bought was never
+   * really theirs. It reaches every slot through the namespace's terms, as the minimum
    * tenure hook's window.
    *
    * Hours by default, and every unit from seconds up. A guarantee measured in
@@ -271,8 +271,8 @@ export default function RegisterPage() {
             </select>
             <p className="ml-2 text-[11px] leading-tight text-ink-faint">
               {tenureCount > 0
-                ? `Nobody can be outbid for ${tenureCount} ${plural(unit, tenureCount)} after taking a space, so what a sponsor pays for actually runs.`
-                : "Anyone can be outbid the moment after they pay. A sponsor has no guarantee their space runs at all."}
+                ? `Nobody can be outbid for ${tenureCount} ${plural(unit, tenureCount)} after taking a space, so what a holder pays for is actually theirs.`
+                : "Anyone can be outbid the moment after they pay. A holder has no guarantee of keeping the name at all."}
             </p>
           </div>
         </div>

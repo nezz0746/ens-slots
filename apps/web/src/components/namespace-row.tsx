@@ -68,7 +68,7 @@ export function NamespaceRow({
             {ns.parentName}
           </span>
           {/*
-           * Said out loud, for the same reason `SponsorCard` says it: this
+           * Said out loud, and deliberately: this
            * profile was read straight off the contract because the parent
            * `.eth` name does not point at the namespace's resolver, so no
            * other ENS client can see any of it. Drawing it like one that DOES
@@ -150,8 +150,7 @@ export function NamespaceRow({
  * A rotted URL gets the broken-image glyph: these point at hosts nobody here
  * controls, set by whoever owns the parent name, so they do rot, and without
  * the fallback a dead one draws the browser's own broken-image box — which
- * reads as this app being broken rather than as a picture being gone. Same
- * reasoning as `SponsorCard`'s `Thumb`.
+ * reads as this app being broken rather than as a picture being gone.
  *
  * An avatar that was never set gets a plain tint instead. Drawing the broken
  * glyph there says a picture failed to arrive when none was ever published,
