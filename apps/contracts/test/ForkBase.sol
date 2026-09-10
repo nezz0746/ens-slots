@@ -70,7 +70,7 @@ abstract contract ForkBase is Test {
 
         _deployStack();
 
-        (address ns, address reg) = _open(PARENT_NODE, "slotsdemo.eth", _noLabels());
+        (address ns, address reg) = _open("slotsdemo.eth", _noLabels());
         namespace = SlotNamespace(payable(ns));
         registry = IPermissionedRegistry(reg);
 
@@ -116,7 +116,8 @@ abstract contract ForkBase is Test {
                             ISlotFactory(SepoliaAddresses.SLOT_FACTORY),
                             IVerifiableFactory(SepoliaAddresses.ENS_VERIFIABLE_FACTORY),
                             SepoliaAddresses.ENS_USER_REGISTRY_IMPL,
-                            IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY)
+                            IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY),
+                            SepoliaAddresses.MINIMUM_TENURE_HOOK
                         )
                     )
                 )
@@ -211,7 +212,7 @@ abstract contract ForkBase is Test {
         return string(label);
     }
 
-    function _open(bytes32 parentNode, string memory parentName, SlotNamespaceCuration.LabelSpec[] memory labels)
+    function _open(string memory parentName, SlotNamespaceCuration.LabelSpec[] memory labels)
         internal
         returns (address ns, address reg)
     {
@@ -219,10 +220,12 @@ abstract contract ForkBase is Test {
         return factory.open(
             SlotNamespaceFactory.OpenParams({
                 registry: IPermissionedRegistry(address(0)),
-                parentNode: parentNode,
                 parentName: parentName,
-                parentLabelhash: _labelhashOf(parentName),
-                terms: _terms(),
+                // Native, so the tests exercise the payout path with the gas
+                // cap on it rather than the easier ERC20 one.
+                currency: IERC20(address(0)),
+                taxBps: TAX_BPS,
+                minTenureSeconds: 0,
                 labels: labels
             })
         );

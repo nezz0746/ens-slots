@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import {ForkBase} from "./ForkBase.sol";
 import {SlotNamespaceBase} from "../src/namespace/SlotNamespaceBase.sol";
 import {SlotNamespaceFactory} from "../src/SlotNamespaceFactory.sol";
@@ -62,28 +64,28 @@ contract TermsTest is ForkBase {
     }
 
     /**
-     * @notice A labelhash that does not belong to the node is refused.
+     * @notice A parent that is not a second-level `.eth` name is refused.
      *
-     * Both names are OWNED, so the factory's "does anybody hold this?" check
-     * passes and the question reaches the namespace — which is the guard under
-     * test. Pointing a namespace at a node while claiming a different name's
-     * labelhash would give it somebody else's owner.
+     * The node derivation is only correct for one, and it is derived rather
+     * than passed now — so this is the check that keeps the assumption true.
+     * There is no longer a labelhash to disagree with anything.
      */
-    function test_AMismatchedLabelhashIsRefused() public {
-        _ownParent("honest.eth");
-        _ownParent("otherone.eth");
+    function test_OnlySecondLevelEthNamesCanBeOpened() public {
+        string[3] memory bad = ["l2beat", "l2beat.xyz", "sub.l2beat.eth"];
 
-        vm.expectRevert(SlotNamespaceBase.LabelhashMismatch.selector);
-        factory.open(
-            SlotNamespaceFactory.OpenParams({
-                registry: IPermissionedRegistry(address(0)),
-                parentNode: _ethNode("honest"),
-                parentName: "honest.eth",
-                parentLabelhash: keccak256("otherone"),
-                terms: _terms(),
-                labels: _noLabels()
-            })
-        );
+        for (uint256 i; i < bad.length; ++i) {
+            vm.expectRevert(SlotNamespaceFactory.NotASecondLevelEthName.selector);
+            factory.open(
+                SlotNamespaceFactory.OpenParams({
+                    registry: IPermissionedRegistry(address(0)),
+                    parentName: bad[i],
+                    currency: IERC20(address(0)),
+                    taxBps: TAX_BPS,
+                    minTenureSeconds: 0,
+                    labels: _noLabels()
+                })
+            );
+        }
     }
 
     // ─── terms, per label and changeable ────────────────────────────────────

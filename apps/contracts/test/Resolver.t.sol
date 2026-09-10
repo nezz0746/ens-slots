@@ -78,7 +78,7 @@ contract ResolverTest is ForkBase {
      */
     function test_OneResolverServesEveryNamespace() public {
         bytes32 otherNode = _ethNode("secondname");
-        (address other,) = _open(otherNode, "secondname.eth", _noLabels());
+        (address other,) = _open("secondname.eth", _noLabels());
 
         (address slotA,) = _slot("alpha", address(0), false);
         _take(slotA, alice, 1 ether);

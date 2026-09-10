@@ -84,7 +84,8 @@ contract Deploy is Config {
                             ISlotFactory(SepoliaAddresses.SLOT_FACTORY),
                             IVerifiableFactory(SepoliaAddresses.ENS_VERIFIABLE_FACTORY),
                             SepoliaAddresses.ENS_USER_REGISTRY_IMPL,
-                            IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY)
+                            IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY),
+                            SepoliaAddresses.MINIMUM_TENURE_HOOK
                         )
                     )
                 )

@@ -141,12 +141,16 @@ export const namespaceFactoryAbi = [
         type: "tuple",
         components: [
           { name: "registry", type: "address" },
-          { name: "parentNode", type: "bytes32" },
+          // The node and the labelhash are DERIVED from this, so there is
+          // nothing here that can contradict anything else. Recipient,
+          // manager, the hook's address and the escrow floor all belong to the
+          // contract, and both mutable flags are forced on — none of them was
+          // ever the caller's to choose, and four of the nine used to be
+          // overwritten before they reached a slot.
           { name: "parentName", type: "string" },
-          // `keccak(label)`. There is no owner field any more — a namespace
-          // answers to whoever the `.eth` registry says holds this.
-          { name: "parentLabelhash", type: "bytes32" },
-          TERMS,
+          { name: "currency", type: "address" },
+          { name: "taxBps", type: "uint256" },
+          { name: "minTenureSeconds", type: "uint64" },
           { ...LABEL_SPEC, name: "labels" },
         ],
       },

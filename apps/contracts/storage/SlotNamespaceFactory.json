@@ -30,32 +30,38 @@
     "type": "address"
   },
   {
-    "label": "ethRegistry",
+    "label": "minimumTenureHook",
     "slot": 5,
+    "offset": 0,
+    "type": "address"
+  },
+  {
+    "label": "ethRegistry",
+    "slot": 6,
     "offset": 0,
     "type": "contract IPermissionedRegistry"
   },
   {
     "label": "resolver",
-    "slot": 6,
+    "slot": 7,
     "offset": 0,
     "type": "address"
   },
   {
     "label": "_namespaces",
-    "slot": 7,
+    "slot": 8,
     "offset": 0,
     "type": "address[]"
   },
   {
     "label": "namespaceOf",
-    "slot": 8,
+    "slot": 9,
     "offset": 0,
     "type": "mapping(bytes32 => address)"
   },
   {
     "label": "__gap",
-    "slot": 9,
+    "slot": 10,
     "offset": 0,
     "type": "uint256[43]"
   }

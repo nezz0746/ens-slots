@@ -3,7 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { encodeFunctionData, keccak256, toHex } from "viem";
+import { encodeFunctionData } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
 
 import { AcquireName } from "@/components/acquire-name";
@@ -162,41 +162,14 @@ export default function RegisterPage() {
           // Zero: let the factory deploy the registry, which is the only way
           // the namespace gets its roles in the same transaction.
           registry: ZERO,
-          parentNode: node,
           parentName: `${clean}.eth`,
-          // How the `.eth` registry keys this name. The namespace checks it
-          // against `parentNode` rather than trusting it, and derives its owner
-          // from it — so there is no owner field to pass any more. Whoever
-          // holds `${clean}.eth` owns the namespace, including after a sale.
-          parentLabelhash: keccak256(toHex(clean)),
-          terms: {
-            // Overwritten per slot with the namespace's own address. A slot's
-            // recipient is written once and has no setter, so a person here
-            // would be paid forever — including after they sold the name.
-            recipient: address,
-            // MockUSDC, like everything else this app prices. Opened with the
-            // zero address instead, the slots would be denominated in native
-            // ETH while every figure on screen was formatted as 6-decimal
-            // USDC — and the ERC-20 paths the hold form takes would revert.
-            currency,
-            // Also overwritten per slot: the namespace manages its own slots,
-            // and the owner reaches them through it.
-            manager: ZERO,
-            // Zero days means no hook at all — and the slot rejects a hook
-            // paired with empty data, or data with no hook, so the two move
-            // together.
-            hook: tenureSeconds > 0n ? addresses.minimumTenureHook : ZERO,
-            hookData: `0x${tenureSeconds.toString(16).padStart(64, "0")}`,
-            taxBps,
-            minDepositSeconds: 604_800n,
-            // Forced true by `initialize` regardless of what is sent. A
-            // namespace that opened with these false could never be given them
-            // later, and the whole point is that terms stay manageable.
-            mutableTax: true,
-            mutableHook: true,
-          },
-          // None yet. Labels are opened from the namespace's own page, where
-          // there is something to look at while choosing them.
+          // MockUSDC, like everything else this app prices. Opened with the
+          // zero address instead, the slots would be denominated in native ETH
+          // while every figure on screen was formatted as 6-decimal USDC — and
+          // the ERC-20 paths the hold form takes would revert.
+          currency,
+          taxBps,
+          minTenureSeconds: tenureSeconds,
           labels: [],
         },
       ],

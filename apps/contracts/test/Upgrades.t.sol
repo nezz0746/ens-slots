@@ -29,7 +29,7 @@ contract UpgradesTest is ForkBase {
      *         namespace.
      */
     function test_OneUpgradeMovesEveryNamespaceAtOnce() public {
-        (address second,) = _open(_ethNode("secondname"), "secondname.eth", _noLabels());
+        (address second,) = _open("secondname.eth", _noLabels());
 
         assertEq(namespace.version(), 3);
         assertEq(SlotNamespace(payable(second)).version(), 3);
@@ -123,7 +123,7 @@ contract UpgradesTest is ForkBase {
         vm.prank(admin);
         factory.upgradeBeacon(v2);
 
-        (address later,) = _open(_ethNode("latername"), "latername.eth", _noLabels());
+        (address later,) = _open("latername.eth", _noLabels());
         assertEq(SlotNamespace(payable(later)).version(), 4);
     }
 
@@ -193,7 +193,7 @@ contract UpgradesTest is ForkBase {
     /// @dev The thing the app depends on most: one address, forever, that still
     ///      lists every namespace ever opened.
     function test_TheFactoryKeepsItsIndexAcrossAnUpgrade() public {
-        _open(_ethNode("secondname"), "secondname.eth", _noLabels());
+        _open("secondname.eth", _noLabels());
 
         uint256 countBefore = factory.count();
         address first = factory.at(0);
@@ -257,7 +257,8 @@ contract UpgradesTest is ForkBase {
             ISlotFactory(SepoliaAddresses.SLOT_FACTORY),
             IVerifiableFactory(SepoliaAddresses.ENS_VERIFIABLE_FACTORY),
             SepoliaAddresses.ENS_USER_REGISTRY_IMPL,
-            IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY)
+            IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY),
+            SepoliaAddresses.MINIMUM_TENURE_HOOK
         );
 
         vm.expectRevert(Initializable.InvalidInitialization.selector);

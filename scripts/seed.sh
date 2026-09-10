@@ -49,7 +49,6 @@ import json, sys
 shared = json.load(open(sys.argv[1]))["shared"]
 for var, key in {
     "SLOT_FACTORY": "slotFactory",
-    "MIN_TENURE_HOOK": "minimumTenureHook",
     "ENS_VF": "ensVerifiableFactory",
     "ENS_UR_IMPL": "ensUserRegistryImpl",
     "ENS_ETH_REGISTRAR": "ensEthRegistrar",
@@ -63,25 +62,27 @@ YEAR=31536000
 ALL_ROLES=0x1111111111111111111111111111111111111111111111111111111111111111
 
 TAX_BPS=500
-MIN_DEPOSIT_SECONDS=604800
 # The tenure every holder is guaranteed, carried by the namespace's hook rather
 # than set per label. Without it a holder can be outbid minutes after paying
-# and the space they bought never runs. The hook's ADDRESS is read above.
-MIN_TENURE_SECONDS=$(printf "0x%064x" 604800)
+# and the space they bought never runs.
+#
+# Plain seconds now, not a padded word: the factory owns the hook's address and
+# builds its data, so all it wants is a duration.
+MIN_TENURE_RAW=604800
 ZERO=0x0000000000000000000000000000000000000000
 ZERO32=0x0000000000000000000000000000000000000000000000000000000000000000
+# The terms tuple used to be built here, field by field, and passed straight
+# through `open`. Four of its nine values were overwritten before they reached
+# a slot and two more were never the caller's to pick, so the factory builds it
+# now and this script passes the three that are actually choices.
+#
 # One currency for the whole protocol: the same MockUSDC the .eth registrar
 # charges in. Slots priced in native ETH while registration was priced in a
 # token meant two mental models and two balances on one screen — and MockUSDC
 # is the one anybody can mint, so it is the one a demo can hand out.
 #
-# The SECOND field is the currency. Native is the zero address; anything else
-# is pulled with `transferFrom`, so every buy and top-up needs an allowance
-# first and must send no `msg.value` at all.
-#
-# Fields four and five are the hook and its data — the minimum tenure, applied
-# to every space opened in the namespace. A label passing hook zero inherits it.
-TERMS="($DEPLOYER,$MOCK_USDC,$ZERO,$MIN_TENURE_HOOK,$MIN_TENURE_SECONDS,$TAX_BPS,$MIN_DEPOSIT_SECONDS,false,false)"
+# Not native: an ERC-20 is pulled with `transferFrom`, so every buy and top-up
+# needs an allowance first and must send no `msg.value` at all.
 
 # MockUSDC is 6 decimals, not 18. Every price below is in whole dollars.
 USDC=1000000
@@ -199,11 +200,12 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   # parameter. On a Sepolia fork "based.eth" resolves and "community.eth" does
   # not, so passing the names directly stored an address for one of them and the
   # name for the other. `cast calldata` does no such thing.
-  # No owner argument any more: a namespace answers to whoever the `.eth`
-  # registry says holds the parent, so the labelhash is what it needs instead.
+  # Three choices and a name. The node and the labelhash are derived from the
+  # name inside the factory; recipient, manager, the hook's address and the
+  # escrow floor belong to the contract; and both mutable flags are forced on.
   data=$(cast calldata \
-    "open((address,bytes32,string,bytes32,(address,address,address,address,bytes32,uint256,uint256,bool,bool),(string,address,bytes32,uint256,bool)[]))" \
-    "($ZERO,$node,$label.eth,$(cast keccak "$label"),$TERMS,$specs)")
+    "open((address,string,address,uint256,uint64,(string,address,bytes32,uint256,bool)[]))" \
+    "($ZERO,$label.eth,$MOCK_USDC,$TAX_BPS,$MIN_TENURE_RAW,$specs)")
   send "$DEPLOYER_PK" "$NSF" "$data"
 
   ns=$(call "$NSF" "namespaceOf(bytes32)(address)" "$node")

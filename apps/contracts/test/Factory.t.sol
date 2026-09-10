@@ -7,6 +7,8 @@ import {SlotNamespaceBase} from "../src/namespace/SlotNamespaceBase.sol";
 import {SlotNamespaceCuration} from "../src/namespace/SlotNamespaceCuration.sol";
 import {IPermissionedRegistry, RegistryRoles} from "../src/interfaces/IENSv2.sol";
 import {ISlot} from "../src/interfaces/ISlots.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import {ForkBase} from "./ForkBase.sol";
 
 /**
@@ -64,7 +66,7 @@ contract FactoryTest is ForkBase {
         labels[1] = _spec("links");
         labels[2] = _spec("hire");
 
-        (address ns,) = _open(_ethNode("populated"), "populated.eth", labels);
+        (address ns,) = _open("populated.eth", labels);
 
         (, string[] memory got,) = SlotNamespace(payable(ns)).listing();
         assertEq(got.length, 3);
@@ -76,7 +78,7 @@ contract FactoryTest is ForkBase {
     /// @dev The factory has no authority there, so the roles are the caller's to
     ///      grant — and until they do, slotting reverts rather than half-working.
     function test_OpenAcceptsAnExistingRegistry() public {
-        (, address reg) = _open(_ethNode("borrowed"), "borrowed.eth", _noLabels());
+        (, address reg) = _open("borrowed.eth", _noLabels());
 
         // Reuse it under a different parent node, which is legal: one registry
         // can sit at many positions in ENSv2. The second parent needs owning
@@ -85,10 +87,10 @@ contract FactoryTest is ForkBase {
         (address ns,) = factory.open(
             SlotNamespaceFactory.OpenParams({
                 registry: IPermissionedRegistry(reg),
-                parentNode: _ethNode("reused"),
                 parentName: "reused.eth",
-                parentLabelhash: keccak256("reused"),
-                terms: _terms(),
+                currency: IERC20(address(0)),
+                taxBps: TAX_BPS,
+                minTenureSeconds: 0,
                 labels: _noLabels()
             })
         );
@@ -105,10 +107,10 @@ contract FactoryTest is ForkBase {
         factory.open(
             SlotNamespaceFactory.OpenParams({
                 registry: IPermissionedRegistry(address(0)),
-                parentNode: PARENT_NODE,
                 parentName: "slotsdemo.eth",
-                parentLabelhash: keccak256("slotsdemo"),
-                terms: _terms(),
+                currency: IERC20(address(0)),
+                taxBps: TAX_BPS,
+                minTenureSeconds: 0,
                 labels: _noLabels()
             })
         );
@@ -122,10 +124,10 @@ contract FactoryTest is ForkBase {
         factory.open(
             SlotNamespaceFactory.OpenParams({
                 registry: IPermissionedRegistry(address(0)),
-                parentNode: _ethNode("ownerless"),
                 parentName: "ownerless.eth",
-                parentLabelhash: keccak256("ownerless"),
-                terms: _terms(),
+                currency: IERC20(address(0)),
+                taxBps: TAX_BPS,
+                minTenureSeconds: 0,
                 labels: _noLabels()
             })
         );
@@ -135,7 +137,7 @@ contract FactoryTest is ForkBase {
     function test_TheFactoryRecordsEveryNamespaceItOpens() public {
         assertEq(factory.count(), 1);
 
-        (address second,) = _open(_ethNode("secondname"), "secondname.eth", _noLabels());
+        (address second,) = _open("secondname.eth", _noLabels());
 
         assertEq(factory.count(), 2);
         assertEq(factory.at(1), second);
