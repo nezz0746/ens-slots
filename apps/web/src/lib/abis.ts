@@ -34,6 +34,7 @@ const LABEL_SPEC = {
     { name: "label", type: "string" },
     { name: "hook", type: "address" },
     { name: "hookData", type: "bytes32" },
+    { name: "taxBps", type: "uint256" },
     { name: "permanent", type: "bool" },
   ],
 } as const;
@@ -52,6 +53,61 @@ export const namespaceFactoryAbi = [
     stateMutability: "view",
     inputs: [{ name: "parentNode", type: "bytes32" }],
     outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "terms",
+    stateMutability: "view",
+    inputs: [],
+    // The slot terms every label here is opened with, and what one that names
+    // no rate of its own inherits.
+    outputs: [TERMS],
+  },
+  {
+    type: "function",
+    name: "parentLabelhash",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "proposeLabelTerms",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "label", type: "string" },
+      { name: "taxBps", type: "uint256" },
+      { name: "hook", type: "address" },
+      { name: "hookData", type: "bytes32" },
+      { name: "changeTax", type: "bool" },
+      { name: "changeHook", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "cancelLabelTerms",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "label", type: "string" },
+      { name: "cancelTax", type: "bool" },
+      { name: "cancelHook", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdraw",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "sweep",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "label", type: "string" }],
+    outputs: [],
   },
   {
     type: "function",
@@ -87,8 +143,10 @@ export const namespaceFactoryAbi = [
           { name: "registry", type: "address" },
           { name: "parentNode", type: "bytes32" },
           { name: "parentName", type: "string" },
+          // `keccak(label)`. There is no owner field any more — a namespace
+          // answers to whoever the `.eth` registry says holds this.
+          { name: "parentLabelhash", type: "bytes32" },
           TERMS,
-          { name: "owner", type: "address" },
           { ...LABEL_SPEC, name: "labels" },
         ],
       },
@@ -135,6 +193,61 @@ export const namespaceAbi = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "terms",
+    stateMutability: "view",
+    inputs: [],
+    // The slot terms every label here is opened with, and what one that names
+    // no rate of its own inherits.
+    outputs: [TERMS],
+  },
+  {
+    type: "function",
+    name: "parentLabelhash",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "proposeLabelTerms",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "label", type: "string" },
+      { name: "taxBps", type: "uint256" },
+      { name: "hook", type: "address" },
+      { name: "hookData", type: "bytes32" },
+      { name: "changeTax", type: "bool" },
+      { name: "changeHook", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "cancelLabelTerms",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "label", type: "string" },
+      { name: "cancelTax", type: "bool" },
+      { name: "cancelHook", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdraw",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "sweep",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "label", type: "string" }],
+    outputs: [],
   },
   {
     type: "function",
@@ -246,6 +359,7 @@ export const namespaceAbi = [
       { name: "label", type: "string" },
       { name: "hook", type: "address" },
       { name: "hookData", type: "bytes32" },
+      { name: "taxBps", type: "uint256" },
       { name: "permanent_", type: "bool" },
     ],
     outputs: [

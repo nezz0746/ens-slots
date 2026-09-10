@@ -9,6 +9,7 @@ import { DECIMALS, isDollarPegged, SYMBOL } from "@/lib/currency";
 
 import { Button } from "@/components/ui/button";
 import { useCollectAll } from "@/hooks/use-collect-all";
+import { useNamespaceBalance } from "@/hooks/use-namespace-balance";
 import type { Namespace } from "@/hooks/use-namespaces";
 import { formatUsd, usdOf, useTokenPrice } from "@/hooks/use-token-price";
 import { MONTH_SECONDS, rentFor } from "@/lib/runway";
@@ -52,14 +53,19 @@ export function NamespaceSummary({
   const showUsd = !isDollarPegged();
   const { collectAll, batched, busy, error } = useCollectAll();
   const { isConnected } = useAccount();
+  const treasury = useNamespaceBalance(namespace.address);
 
   const held = namespace.subnames.filter((s) => s.state && !s.state.isVacant);
 
-  // The rate is a constant of the namespace — every slot here was created from
-  // the same terms — so it is read off whichever one answered first and stated
-  // ONCE, here. It used to sit on every subname's figures, where it was the
-  // same number repeated as though it might not be.
-  const taxBps = namespace.subnames.find((s) => s.state)?.state?.taxBps;
+  // The namespace's DEFAULT rate, and only that.
+  //
+  // This used to read the first slot's rate and call it the namespace's, which
+  // was true right up until labels could be opened on their own terms. Now
+  // `base` sits at 10% while the namespace's default is 5%, and taking the
+  // first answer would have printed one name's rate as though it governed all
+  // of them. The per-name rate belongs on the per-name panel; this is the
+  // number a new label inherits.
+  const taxBps = namespace.defaultTaxBps;
 
   const monthly = held.reduce(
     (sum, s) => sum + rentFor(MONTH_SECONDS, s.state!.price, s.state!.taxBps),
@@ -100,7 +106,7 @@ export function NamespaceSummary({
           sub={showUsd ? formatUsd(usdOf(monthly, price)) : null}
         />
         {taxBps !== undefined && (
-          <Stat label="Tax" value={`${Number(taxBps) / 100}% / 30d`} />
+          <Stat label="Default tax" value={`${Number(taxBps) / 100}% / 30d`} />
         )}
         <Stat
           label="Collectable"
@@ -115,8 +121,38 @@ export function NamespaceSummary({
           sub={showUsd ? formatUsd(usdOf(ticking, price)) : null}
         />
 
+        {/*
+          * Money that has left the slots but not yet reached the owner.
+          *
+          * Collecting flushes tax to the RECIPIENT, which is the namespace
+          * itself — that is what keeps the income attached to the name rather
+          * than to whoever opened it. So there are two steps now, and hiding
+          * the middle one would leave a figure that vanished from
+          * "collectable" and appeared nowhere.
+          */}
+        {treasury.amount > 0n && (
+          <Stat
+            label="To withdraw"
+            value={`${trim(treasury.amount)} ${SYMBOL}`}
+            sub={showUsd ? formatUsd(usdOf(treasury.amount, price)) : null}
+          />
+        )}
+
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {actions}
+          {treasury.amount > 0n && (
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={treasury.withdrawing}
+              // Anyone may press it; it can only pay the owner.
+              onClick={treasury.withdraw}
+              title="Send what the namespace holds to whoever owns the parent name"
+            >
+              {treasury.withdrawing ? <Loader2 className="animate-spin" /> : <HandCoins />}
+              Withdraw
+            </Button>
+          )}
           <Button
             size="sm"
             variant={collectableNow > 0n ? "primary" : "outline"}

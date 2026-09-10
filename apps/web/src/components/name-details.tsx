@@ -13,6 +13,7 @@ import {
 import { useAccount } from "wagmi";
 
 import { MarketFigures } from "@/components/market-figures";
+import { TermsEditor } from "@/components/terms-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Namespace, Subname } from "@/hooks/use-namespaces";
@@ -69,6 +70,8 @@ export function NameDetails({
       </header>
 
       <MarketFigures subname={subname} />
+
+      <TermsEditor namespace={namespace} subname={subname} />
 
       <Records
         name={name}

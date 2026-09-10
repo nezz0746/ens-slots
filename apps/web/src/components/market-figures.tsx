@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { useAddresses } from "@/hooks/use-addresses";
 import type { Subname } from "@/hooks/use-namespaces";
 import { formatAmount } from "@/lib/format";
 import {
@@ -27,19 +28,80 @@ import { cn } from "@/lib/utils";
  * Facts here, under the name. Controls stay on the right.
  */
 export function MarketFigures({ subname }: { subname: Subname }) {
+  const addresses = useAddresses();
   const state = subname.state;
   if (!state) return null;
 
+  const tenure = tenureSecondsOf(state, addresses.minimumTenureHook);
+
   return (
-    <section>
-      <header className="flex items-center justify-between gap-3 pb-2">
+    <section className="space-y-2">
+      <header className="flex items-center justify-between gap-3">
         <h3 className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
           The market
         </h3>
         <Status subname={subname} />
       </header>
-      <Figures state={state} />
+      <Figures state={state} tenure={tenure} />
+      <PendingTerms state={state} minimumTenureHook={addresses.minimumTenureHook} />
     </section>
+  );
+}
+
+/**
+ * The window a holder cannot be outbid in, in seconds — or null.
+ *
+ * It is the minimum-tenure hook's configuration word, and it is only that if
+ * the hook attached is actually that hook: `hookData` is opaque to the slot and
+ * means whatever the hook it belongs to says it means, so reading somebody
+ * else's word as a duration would print a confident wrong number.
+ */
+function tenureSecondsOf(
+  state: NonNullable<Subname["state"]>,
+  minimumTenureHook: `0x${string}`,
+): bigint | null {
+  if (state.hook.toLowerCase() !== minimumTenureHook.toLowerCase()) return null;
+  const seconds = BigInt(state.hookData);
+  return seconds > 0n ? seconds : null;
+}
+
+/**
+ * A change the owner has queued, said to everyone.
+ *
+ * Deliberately not owner-only. A queued change is the single most important
+ * thing a prospective buyer does not otherwise know — it does not touch the
+ * sitting occupant, it lands on whoever takes the name NEXT, and that is the
+ * person reading this panel.
+ */
+function PendingTerms({
+  state,
+  minimumTenureHook,
+}: {
+  state: NonNullable<Subname["state"]>;
+  minimumTenureHook: `0x${string}`;
+}) {
+  if (!state.pendingHasTax && !state.pendingHasHook) return null;
+
+  const parts: string[] = [];
+  if (state.pendingHasTax) {
+    parts.push(`tax to ${Number(state.pendingTaxBps) / 100}% / 30d`);
+  }
+  if (state.pendingHasHook) {
+    const none = state.pendingHook === "0x0000000000000000000000000000000000000000";
+    const tenure =
+      !none && state.pendingHook.toLowerCase() === minimumTenureHook.toLowerCase()
+        ? describeDays(BigInt(state.pendingHookData))
+        : null;
+    parts.push(none ? "no guaranteed run" : tenure ? `guaranteed run to ${tenure}` : "a different hook");
+  }
+
+  return (
+    <p className="rounded-xl border border-warn-soft bg-warn-soft px-3 py-2 text-[11px] leading-relaxed text-warn">
+      <span className="font-semibold">Queued: {parts.join(", ")}.</span>{" "}
+      {state.isVacant
+        ? "It lands on whoever takes this name."
+        : "It does not affect the current holder — it lands at the next turnover."}
+    </p>
   );
 }
 
@@ -67,7 +129,13 @@ export function Status({ subname }: { subname: Subname }) {
  * only means anything divided by the rent, which is the runway. Four figures
  * where two were derivable made the row longer and the decision no clearer.
  */
-function Figures({ state }: { state: NonNullable<Subname["state"]> }) {
+function Figures({
+  state,
+  tenure,
+}: {
+  state: NonNullable<Subname["state"]>;
+  tenure: bigint | null;
+}) {
   // The slot's own answer, not `runwaySeconds` on the deposit. They differ:
   // this one accounts for tax accrued since the last settlement, so it is the
   // number that decides an actual liquidation. Computing it here as well would
@@ -77,7 +145,12 @@ function Figures({ state }: { state: NonNullable<Subname["state"]> }) {
   const perMonth = rentFor(MONTH_SECONDS, state.price, state.taxBps);
 
   return (
-    <dl className="grid grid-cols-3 divide-x divide-line overflow-hidden rounded-xl border border-line bg-canvas/50">
+    <dl
+      className={cn(
+        "grid divide-x divide-line overflow-hidden rounded-xl border border-line bg-canvas/50",
+        tenure ? "grid-cols-4" : "grid-cols-3",
+      )}
+    >
       <Figure label="Valuation" value={formatAmount(state.price)} />
       <Figure label="Rent" value={`${formatAmount(perMonth)}/mo`} />
       <Figure
@@ -85,6 +158,10 @@ function Figures({ state }: { state: NonNullable<Subname["state"]> }) {
         value={state.isVacant ? "—" : describeDays(runway)}
         className={state.isVacant ? undefined : TONE_TEXT[tone]}
       />
+      {/* What a buyer is actually guaranteed. It was set once when the
+          namespace opened and then shown nowhere at all, which made it a
+          promise nobody could read. */}
+      {tenure && <Figure label="Guaranteed" value={describeDays(tenure)} />}
     </dl>
   );
 }

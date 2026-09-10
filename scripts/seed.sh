@@ -199,9 +199,11 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   # parameter. On a Sepolia fork "based.eth" resolves and "community.eth" does
   # not, so passing the names directly stored an address for one of them and the
   # name for the other. `cast calldata` does no such thing.
+  # No owner argument any more: a namespace answers to whoever the `.eth`
+  # registry says holds the parent, so the labelhash is what it needs instead.
   data=$(cast calldata \
-    "open((address,bytes32,string,(address,address,address,address,bytes32,uint256,uint256,bool,bool),address,(string,address,bytes32,bool)[]))" \
-    "($ZERO,$node,$label.eth,$TERMS,$DEPLOYER,$specs)")
+    "open((address,bytes32,string,bytes32,(address,address,address,address,bytes32,uint256,uint256,bool,bool),(string,address,bytes32,uint256,bool)[]))" \
+    "($ZERO,$node,$label.eth,$(cast keccak "$label"),$TERMS,$specs)")
   send "$DEPLOYER_PK" "$NSF" "$data"
 
   ns=$(call "$NSF" "namespaceOf(bytes32)(address)" "$node")
@@ -220,10 +222,16 @@ open_namespace() {           # $1 = label, e.g. "community", $2.. = label specs
   echo "$ns"
 }
 
-# A `LabelSpec` tuple. Never permanent, and hook zero so the label inherits the
-# namespace's minimum tenure rather than carrying a policy of its own.
+# A `LabelSpec` tuple. Never permanent; hook and tax both zero, so the label
+# inherits the namespace's minimum tenure and its rate rather than carrying a
+# policy of its own. Either can be overridden per label — `spec_taxed` below
+# does, so the seed has one name that is visibly on its own terms.
 spec() {                     # $1 = label
-  echo "($1,$ZERO,$ZERO32,false)"
+  echo "($1,$ZERO,$ZERO32,0,false)"
+}
+
+spec_taxed() {               # $1 = label, $2 = tax in bps
+  echo "($1,$ZERO,$ZERO32,$2,false)"
 }
 
 node_of() {                  # $1 = namespace, $2 = label
@@ -283,9 +291,13 @@ take() {                     # $1 = namespace, $2 = label, $3 = pk, $4 = who, $5
 # `base`, `rare`, `cool`, `fun` — short, ordinary words, the kind of subname
 # somebody actually wants. Four of them because three could not show a spread
 # and four can.
+#
+# `base` is opened at 10% rather than the namespace's 5%. Tax rate is not a
+# second price — it is how fast a name turns over, and the one name here with
+# obvious demand is the one worth churning faster. The other three inherit.
 
 echo "→ l2beat.eth"
-L2BEAT=$(open_namespace l2beat "$(spec base)" "$(spec rare)" "$(spec cool)" "$(spec fun)")
+L2BEAT=$(open_namespace l2beat "$(spec_taxed base 1000)" "$(spec rare)" "$(spec cool)" "$(spec fun)")
 
 # ── what the namespace says about itself ────────────────────────────────────
 #

@@ -43,6 +43,15 @@ export interface SlotState {
   collectedTax: bigint;
   recipient: `0x${string}`;
   hook: `0x${string}`;
+  /** The hook's configuration word. For the minimum-tenure hook, seconds. */
+  hookData: `0x${string}`;
+  /** A queued change of terms, if the owner has proposed one. */
+  pendingTaxBps: bigint;
+  pendingHook: `0x${string}`;
+  pendingHookData: `0x${string}`;
+  pendingHasTax: boolean;
+  pendingHasHook: boolean;
+  hasRipeTerms: boolean;
 }
 
 export interface Subname {
@@ -58,6 +67,8 @@ export interface Namespace {
   parentNode: `0x${string}`;
   owner: `0x${string}`;
   resolver: `0x${string}`;
+  /** The tax rate a label opened without its own inherits. */
+  defaultTaxBps: bigint;
   subnames: Subname[];
   occupied: number;
   /** What every occupant has collectively declared their names are worth. */
@@ -89,6 +100,13 @@ function toState(info: any): SlotState {
     collectedTax: info.collectedTax,
     recipient: info.recipient,
     hook: info.hook,
+    hookData: info.hookData,
+    pendingTaxBps: info.pendingTaxBps,
+    pendingHook: info.pendingHook,
+    pendingHookData: info.pendingHookData,
+    pendingHasTax: info.pendingHasTax,
+    pendingHasHook: info.pendingHasHook,
+    hasRipeTerms: info.hasRipeTerms,
   };
 }
 
@@ -108,7 +126,7 @@ export function useNamespaces(only?: `0x${string}`) {
   );
 
   // Round two: who each namespace is.
-  const PER_NS = 5;
+  const PER_NS = 6;
   const { data: meta, isLoading: loadingMeta } = useReadContracts({
     contracts: list.flatMap((address) => [
       { address, abi: namespaceAbi, functionName: "parentName" } as const,
@@ -116,6 +134,9 @@ export function useNamespaces(only?: `0x${string}`) {
       { address, abi: namespaceAbi, functionName: "owner" } as const,
       { address, abi: namespaceAbi, functionName: "resolver" } as const,
       { address, abi: namespaceAbi, functionName: "listing" } as const,
+      // The terms a NEW label inherits. Read separately from any slot's own
+      // rate, which can differ per label now.
+      { address, abi: namespaceAbi, functionName: "terms" } as const,
     ]),
     query: { enabled: list.length > 0, refetchInterval: 8_000 },
   });
@@ -163,6 +184,8 @@ export function useNamespaces(only?: `0x${string}`) {
         parentNode: (meta[i * PER_NS + 1]?.result as `0x${string}`) ?? "0x",
         owner: (meta[i * PER_NS + 2]?.result as `0x${string}`) ?? "0x",
         resolver: (meta[i * PER_NS + 3]?.result as `0x${string}`) ?? "0x",
+        defaultTaxBps:
+          (meta[i * PER_NS + 5]?.result as { taxBps: bigint } | undefined)?.taxBps ?? 0n,
         subnames,
         occupied: subnames.filter((s) => s.state && !s.state.isVacant).length,
         totalValue: subnames.reduce(
