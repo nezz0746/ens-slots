@@ -14,6 +14,7 @@ import { useTx } from "@/hooks/use-tx";
 import {
   ensRegistryAbi,
   ethRegistrarAbi,
+  namespaceAbi,
   namespaceFactoryAbi,
   userRegistryAbi,
   verifiableFactoryAbi,
@@ -181,6 +182,49 @@ export default function RegisterPage() {
       functionName: "namespaceOf",
       args: [node],
     });
+
+    /**
+     * Point the parent at the registry the namespace just got.
+     *
+     * ── Why this is a second transaction and not part of `open` ─────────────
+     *
+     * `setSubregistry` belongs to whoever owns the `.eth` name, and the factory
+     * is not that — it cannot do this on anybody's behalf, ever. A name bought
+     * through the flow above dodges it because the registrar takes the
+     * subregistry as an argument and registers the name already pointing at it.
+     * A name you ALREADY hold has no such moment.
+     *
+     * ── Why the app makes it instead of printing it ────────────────────────
+     *
+     * This used to be a paragraph telling you to go and call it yourself, with
+     * the labelhash spelled out. That existed because the page could not know
+     * you were the owner — anybody could open a namespace for any name. Now the
+     * form checks, and refuses when the name is not yours, so by the time this
+     * runs the connected wallet is provably the one account that can do it.
+     *
+     * Skipped when the name was just bought: it is already pointed there, and
+     * setting it again is a transaction that changes nothing.
+     */
+    if (!needsBuying && tokenId !== undefined) {
+      const registry = await client.readContract({
+        address: namespace as `0x${string}`,
+        abi: namespaceAbi,
+        functionName: "registry",
+      });
+      const pointed = await send("point", {
+        address: addresses.ensEthRegistry,
+        abi: ensRegistryAbi,
+        functionName: "setSubregistry",
+        args: [tokenId, registry],
+      });
+      // Not fatal. The namespace exists and its page says whether the name
+      // resolves, which is a better place to retry from than this form.
+      if (!pointed) {
+        router.push(`/n/${namespace}`);
+        return;
+      }
+    }
+
     router.push(`/n/${namespace}`);
   }
 
@@ -244,8 +288,9 @@ export default function RegisterPage() {
             {needsBuying ? "Then open the namespace" : "Open the namespace"}
           </p>
           <p className="mt-1 text-[11px] leading-snug text-ink-faint">
-            One transaction: it deploys your subname registry, gives the
-            namespace the two roles it needs, and points it at the resolver.
+            {needsBuying
+              ? "One transaction: it deploys your subname registry, gives the namespace the two roles it needs, and points it at the resolver. The name you just bought already points there."
+              : "Two transactions. The first deploys your subname registry and gives the namespace its roles; the second points your name at it, which only you can do."}
           </p>
         </div>
         <Button
@@ -268,6 +313,11 @@ export default function RegisterPage() {
               <Loader2 className="animate-spin" />
               Confirming…
             </>
+          ) : pending === "point" ? (
+            <>
+              <Loader2 className="animate-spin" />
+              Pointing your name at it…
+            </>
           ) : (
             "Open"
           )}
@@ -285,24 +335,6 @@ export default function RegisterPage() {
         </p>
       )}
 
-      <Card className="space-y-2 bg-canvas p-5 text-xs leading-relaxed text-ink-soft">
-        <p className="font-medium text-ink">
-          If you already own <b>{clean || "your name"}.eth</b>
-        </p>
-        <p>
-          Buying it above points it at the registry for you. A name you already
-          hold needs one call of your own, on ENS&rsquo;s registry, from
-          whichever address owns it:
-        </p>
-        <code className="block rounded-lg bg-surface px-3 py-2 text-[11px] break-all">
-          setSubregistry(labelhash(&quot;{clean || "…"}&quot;), &lt;your
-          registry&gt;)
-        </code>
-        <p>
-          Until then names register and mint, and resolve to nothing — the
-          Universal Resolver walks down from the root and never reaches them.
-        </p>
-      </Card>
     </div>
   );
 }
