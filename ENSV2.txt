@@ -343,6 +343,12 @@ ERC1155 with exactly one owner per id — ERC721 ownership semantics with ERC115
 batching and tooling support.
 
   ownerOf(id)             the single owner, or address(0)
+                          NOTE: `id` is a TOKEN ID, not a labelhash. Passing
+                          keccak(label) returns address(0) for a name that is
+                          registered — no revert, just a wrong answer. Convert
+                          with getTokenId(uint256(labelhash)) first. The token
+                          id carries a version counter, so it changes when a
+                          name expires and is registered again.
   balanceOf(account, id)  1 or 0
   transfers               value must be exactly 1, or it reverts
 

@@ -85,7 +85,7 @@ contract ResolverTest is ForkBase {
 
         vm.prank(owner);
         (address slotB,) =
-            SlotNamespace(other).slotLabel("alpha", address(0), bytes32(0), false);
+            SlotNamespace(payable(other)).slotLabel("alpha", address(0), bytes32(0), 0, false);
         _take(slotB, bob, 1 ether);
 
         assertEq(_addr(_dnsEncode("alpha", "slotsdemo", "eth")), alice, "the first namespace's name");

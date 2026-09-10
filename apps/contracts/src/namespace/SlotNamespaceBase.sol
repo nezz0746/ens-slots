@@ -61,9 +61,18 @@ abstract contract SlotNamespaceBase {
     ///         to authorise a write.
     mapping(string key => string) internal _parentText;
 
+    /// @notice The `.eth` registry the parent name lives in, and the labelhash
+    ///         it is keyed by there.
+    /// @dev Together these are how {SlotNamespace-owner} is DERIVED rather than
+    ///      stored. The `.eth` registry keys by `keccak(label)`, not by the
+    ///      namehash, so {parentNode} alone cannot ask it anything.
+    IPermissionedRegistry public ethRegistry;
+
+    bytes32 public parentLabelhash;
+
     /// @dev Room to append. `script/layout.py` keys on this name.
     // forge-lint: disable-next-line(mixed-case-variable)
-    uint256[51] private __gap;
+    uint256[49] private __gap;
 
     error AlreadySlotted(string label);
     error NotSlotted(bytes32 node);
@@ -73,12 +82,19 @@ abstract contract SlotNamespaceBase {
     error NotOccupant(address caller, address occupant);
     error NoResolver();
     error LengthMismatch();
+    error NotParentOwner(address caller, address owner);
+    error OwnershipFollowsTheName();
+    error LabelhashMismatch();
+    error NothingToWithdraw();
 
     event LabelSlotted(bytes32 indexed node, string label, address indexed slot, address hook, bool permanent);
     event LabelUnslotted(bytes32 indexed node, string label);
     event ResolverChanged(address indexed resolver);
     event TextChanged(bytes32 indexed node, uint64 indexed tenureId, string key, string value);
     event ParentTextChanged(string key, string value);
+    event TermsProposed(bytes32 indexed node, uint256 taxBps, address hook, bytes32 hookData, bool changeTax, bool changeHook);
+    event TermsCancelled(bytes32 indexed node, bool cancelTax, bool cancelHook);
+    event Withdrawn(address indexed to, uint256 amount);
 
     /// @dev namehash, one level down from the parent.
     function _node(bytes32 labelhash) internal view returns (bytes32) {

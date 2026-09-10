@@ -32,7 +32,7 @@ contract SlotNamespaceV2 is SlotNamespace {
 
     /// @dev One ahead of {SlotNamespace}'s own `version()`. Bump both together.
     function version() public pure override returns (uint64) {
-        return 3;
+        return 4;
     }
 }
 

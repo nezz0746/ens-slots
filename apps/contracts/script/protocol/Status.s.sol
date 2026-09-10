@@ -47,7 +47,7 @@ contract Status is Config {
 
         address impl = factory.implementation();
         console2.log("namespace impl ", impl);
-        console2.log("  version      ", SlotNamespace(impl).version());
+        console2.log("  version      ", SlotNamespace(payable(impl)).version());
         console2.log("");
 
         console2.log("resolver       ", address(resolver));
@@ -69,10 +69,10 @@ contract Status is Config {
 
         _drift("factory  ", factory.version(), recordedVersion("SlotNamespaceFactory"));
         _drift("resolver ", resolver.version(), recordedVersion("SlotNamespaceResolver"));
-        _drift("namespace", SlotNamespace(impl).version(), recordedVersion("SlotNamespaceImplementation"));
+        _drift("namespace", SlotNamespace(payable(impl)).version(), recordedVersion("SlotNamespaceImplementation"));
 
         for (uint256 i; i < factory.count(); ++i) {
-            SlotNamespace ns = SlotNamespace(factory.at(i));
+            SlotNamespace ns = SlotNamespace(payable(factory.at(i)));
             console2.log(ns.parentName(), address(ns), ns.slottedCount());
         }
     }

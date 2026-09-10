@@ -51,7 +51,7 @@ contract FactoryTest is ForkBase {
 
         // The roles are real: the namespace can immediately use them.
         vm.prank(owner);
-        namespace.slotLabel("alpha", address(0), bytes32(0), false);
+        namespace.slotLabel("alpha", address(0), bytes32(0), 0, false);
         assertEq(
             uint8(registry.getStatus(uint256(keccak256("alpha")))), uint8(IPermissionedRegistry.Status.REGISTERED)
         );
@@ -66,7 +66,7 @@ contract FactoryTest is ForkBase {
 
         (address ns,) = _open(_ethNode("populated"), "populated.eth", labels);
 
-        (, string[] memory got,) = SlotNamespace(ns).listing();
+        (, string[] memory got,) = SlotNamespace(payable(ns)).listing();
         assertEq(got.length, 3);
         assertEq(got[0], "gm");
         assertEq(got[2], "hire");
@@ -79,37 +79,53 @@ contract FactoryTest is ForkBase {
         (, address reg) = _open(_ethNode("borrowed"), "borrowed.eth", _noLabels());
 
         // Reuse it under a different parent node, which is legal: one registry
-        // can sit at many positions in ENSv2.
+        // can sit at many positions in ENSv2. The second parent needs owning
+        // too — a namespace answers to whoever holds its name.
+        _ownParent("reused.eth");
         (address ns,) = factory.open(
             SlotNamespaceFactory.OpenParams({
                 registry: IPermissionedRegistry(reg),
                 parentNode: _ethNode("reused"),
                 parentName: "reused.eth",
+                parentLabelhash: keccak256("reused"),
                 terms: _terms(),
-                owner: owner,
                 labels: _noLabels()
             })
         );
 
-        assertEq(address(SlotNamespace(ns).registry()), reg, "it took the registry it was given");
+        assertEq(address(SlotNamespace(payable(ns)).registry()), reg, "it took the registry it was given");
     }
 
     function test_AParentCannotBeOpenedTwice() public {
+        // `_open` would register the parent first, and `expectRevert` binds to
+        // the very next call — which would be that, not the one under test.
         vm.expectRevert(
             abi.encodeWithSelector(SlotNamespaceFactory.AlreadyOpened.selector, PARENT_NODE, address(namespace))
         );
-        _open(PARENT_NODE, "slotsdemo.eth", _noLabels());
+        factory.open(
+            SlotNamespaceFactory.OpenParams({
+                registry: IPermissionedRegistry(address(0)),
+                parentNode: PARENT_NODE,
+                parentName: "slotsdemo.eth",
+                parentLabelhash: keccak256("slotsdemo"),
+                terms: _terms(),
+                labels: _noLabels()
+            })
+        );
     }
 
-    function test_ANamespaceCannotBeOpenedWithNoOwner() public {
+    /// @notice A name nobody owns has no namespace to open. `ownerOf` answers
+    ///         zero for an unregistered or expired name, and that is the whole
+    ///         check now — there is no owner argument left to get wrong.
+    function test_ANamespaceCannotBeOpenedForAnUnownedName() public {
         vm.expectRevert(SlotNamespaceFactory.ZeroAddress.selector);
         factory.open(
             SlotNamespaceFactory.OpenParams({
                 registry: IPermissionedRegistry(address(0)),
                 parentNode: _ethNode("ownerless"),
                 parentName: "ownerless.eth",
+                parentLabelhash: keccak256("ownerless"),
                 terms: _terms(),
-                owner: address(0),
                 labels: _noLabels()
             })
         );

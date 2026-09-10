@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
+import {IPermissionedRegistry} from "../src/interfaces/IENSv2.sol";
 import {SepoliaAddresses} from "../src/Addresses.sol";
 import {SlotNamespace} from "../src/SlotNamespace.sol";
 import {SlotNamespaceFactory} from "../src/SlotNamespaceFactory.sol";
@@ -30,15 +31,15 @@ contract UpgradesTest is ForkBase {
     function test_OneUpgradeMovesEveryNamespaceAtOnce() public {
         (address second,) = _open(_ethNode("secondname"), "secondname.eth", _noLabels());
 
-        assertEq(namespace.version(), 2);
-        assertEq(SlotNamespace(second).version(), 2);
+        assertEq(namespace.version(), 3);
+        assertEq(SlotNamespace(payable(second)).version(), 3);
 
         address v2 = address(new SlotNamespaceV2());
         vm.prank(admin);
         factory.upgradeBeacon(v2);
 
-        assertEq(namespace.version(), 3, "the first namespace took the new code");
-        assertEq(SlotNamespace(second).version(), 3, "and so did the second, in the same transaction");
+        assertEq(namespace.version(), 4, "the first namespace took the new code");
+        assertEq(SlotNamespace(payable(second)).version(), 4, "and so did the second, in the same transaction");
     }
 
     /**
@@ -107,13 +108,13 @@ contract UpgradesTest is ForkBase {
         factory.upgradeBeacon(v2);
 
         vm.prank(owner);
-        SlotNamespaceV2(address(namespace)).setTagline("open for business");
-        assertEq(SlotNamespaceV2(address(namespace)).tagline(), "open for business");
+        SlotNamespaceV2(payable(address(namespace))).setTagline("open for business");
+        assertEq(SlotNamespaceV2(payable(address(namespace))).tagline(), "open for business");
 
         // And the ownership that gates it is the ownership it already had.
         vm.prank(alice);
         vm.expectRevert();
-        SlotNamespaceV2(address(namespace)).setTagline("not mine");
+        SlotNamespaceV2(payable(address(namespace))).setTagline("not mine");
     }
 
     /// @notice A namespace opened AFTER an upgrade gets the new code too.
@@ -123,7 +124,7 @@ contract UpgradesTest is ForkBase {
         factory.upgradeBeacon(v2);
 
         (address later,) = _open(_ethNode("latername"), "latername.eth", _noLabels());
-        assertEq(SlotNamespace(later).version(), 3);
+        assertEq(SlotNamespace(payable(later)).version(), 4);
     }
 
     // ─── who may do it ──────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ contract UpgradesTest is ForkBase {
 
         vm.prank(multisig);
         factory.upgradeBeacon(v2);
-        assertEq(namespace.version(), 3);
+        assertEq(namespace.version(), 4);
     }
 
     // ─── the UUPS singletons ────────────────────────────────────────────────
@@ -255,14 +256,15 @@ contract UpgradesTest is ForkBase {
             address(namespaceImpl),
             ISlotFactory(SepoliaAddresses.SLOT_FACTORY),
             IVerifiableFactory(SepoliaAddresses.ENS_VERIFIABLE_FACTORY),
-            SepoliaAddresses.ENS_USER_REGISTRY_IMPL
+            SepoliaAddresses.ENS_USER_REGISTRY_IMPL,
+            IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY)
         );
 
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         resolverImpl.initialize(alice, factory);
 
         SlotNamespace.InitParams memory p;
-        p.owner_ = alice;
+        p.ethRegistry_ = IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         namespaceImpl.initialize(p);
     }
@@ -270,7 +272,7 @@ contract UpgradesTest is ForkBase {
     /// @notice And a live namespace cannot be re-initialized to steal it.
     function test_ALiveNamespaceCannotBeReinitialized() public {
         SlotNamespace.InitParams memory p;
-        p.owner_ = alice;
+        p.ethRegistry_ = IPermissionedRegistry(SepoliaAddresses.ENS_ETH_REGISTRY);
 
         vm.prank(alice);
         vm.expectRevert(Initializable.InvalidInitialization.selector);

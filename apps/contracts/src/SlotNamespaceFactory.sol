@@ -41,6 +41,12 @@ contract SlotNamespaceFactory is VersionedUUPS {
     IVerifiableFactory public verifiableFactory;
     address public userRegistryImpl;
 
+    /// @notice The `.eth` registry every namespace derives its owner from.
+    /// @dev Configured here rather than passed to {open}: a caller who could
+    ///      name the registry could name one whose `ownerOf` answers whatever
+    ///      they like, which is the whole of a namespace's access control.
+    IPermissionedRegistry public ethRegistry;
+
     /// @notice The resolver every namespace opened here starts on. Behind its
     ///         own proxy, so ENS records it once and never repoint it.
     address public resolver;
@@ -86,11 +92,14 @@ contract SlotNamespaceFactory is VersionedUUPS {
         address namespaceImpl,
         ISlotFactory slotFactory_,
         IVerifiableFactory verifiableFactory_,
-        address userRegistryImpl_
+        address userRegistryImpl_,
+        IPermissionedRegistry ethRegistry_
     ) external initializer {
         if (admin_ == address(0)) revert ZeroAddress();
+        if (address(ethRegistry_) == address(0)) revert ZeroAddress();
 
         admin = admin_;
+        ethRegistry = ethRegistry_;
         slotFactory = slotFactory_;
         verifiableFactory = verifiableFactory_;
         userRegistryImpl = userRegistryImpl_;
@@ -107,8 +116,11 @@ contract SlotNamespaceFactory is VersionedUUPS {
         IPermissionedRegistry registry;
         bytes32 parentNode;
         string parentName;
+        /// @dev `keccak(label)` — how the `.eth` registry keys the parent. The
+        ///      namespace checks it against {parentNode} rather than trusting
+        ///      it; see {SlotNamespace-initialize}.
+        bytes32 parentLabelhash;
         SlotInit terms;
-        address owner;
         SlotNamespaceCuration.LabelSpec[] labels;
     }
 
@@ -124,7 +136,11 @@ contract SlotNamespaceFactory is VersionedUUPS {
     function open(OpenParams calldata p) external returns (address namespace, address registry) {
         address existing = namespaceOf[p.parentNode];
         if (existing != address(0)) revert AlreadyOpened(p.parentNode, existing);
-        if (p.owner == address(0)) revert ZeroAddress();
+        // No owner argument any more. A namespace answers to whoever holds its
+        // parent name, so there is nothing here to choose — and opening one for
+        // a name you do not own now hands it to the person who does.
+        address owner = ethRegistry.ownerOf(ethRegistry.getTokenId(uint256(p.parentLabelhash)));
+        if (owner == address(0)) revert ZeroAddress();
 
         // Empty init data: the address must exist before the registry that
         // grants it roles. Initialized at the end of this same call.
@@ -132,14 +148,14 @@ contract SlotNamespaceFactory is VersionedUUPS {
 
         registry = address(p.registry);
         if (registry == address(0)) {
-            registry = _deployRegistry(p.parentNode, namespace, p.owner);
+            registry = _deployRegistry(p.parentNode, namespace, owner);
         }
 
         // Before initialize, so a label opened there already resolves here.
         _namespaces.push(namespace);
         namespaceOf[p.parentNode] = namespace;
 
-        SlotNamespace(namespace)
+        SlotNamespace(payable(namespace))
             .initialize(
                 SlotNamespace.InitParams({
                     registry_: IPermissionedRegistry(registry),
@@ -148,12 +164,13 @@ contract SlotNamespaceFactory is VersionedUUPS {
                     parentName_: p.parentName,
                     resolver_: resolver,
                     terms_: p.terms,
-                    owner_: p.owner,
+                    ethRegistry_: ethRegistry,
+                    parentLabelhash_: p.parentLabelhash,
                     labels: p.labels
                 })
             );
 
-        emit NamespaceOpened(namespace, registry, p.parentNode, p.parentName, p.owner);
+        emit NamespaceOpened(namespace, registry, p.parentNode, p.parentName, owner);
     }
 
     /// @dev The namespace gets exactly what it uses — never `ROLE_RENEW`, as
