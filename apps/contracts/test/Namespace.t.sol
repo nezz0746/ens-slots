@@ -20,13 +20,13 @@ contract NamespaceTest is ForkBase {
 
     /// @notice One call registers the name and creates the slot behind it.
     function test_SlottingALabelRegistersItAndCreatesASlot() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
 
-        IPermissionedRegistry.State memory state = registry.getState(uint256(keccak256("sponsor")));
+        IPermissionedRegistry.State memory state = registry.getState(uint256(keccak256("alpha")));
         assertEq(uint8(state.status), uint8(IPermissionedRegistry.Status.REGISTERED), "the label is registered");
         assertEq(state.latestOwner, address(namespace), "and the namespace holds it, not any occupant");
         assertEq(state.expiry, type(uint64).max, "permanently: the tax is the only clock");
-        assertEq(registry.getResolver("sponsor"), address(resolver), "pointed at our resolver");
+        assertEq(registry.getResolver("alpha"), address(resolver), "pointed at our resolver");
 
         assertTrue(slot.code.length > 0, "a real slot was created");
         assertEq(ISlot(slot).taxBps(), TAX_BPS, "on the namespace's terms");
@@ -34,29 +34,29 @@ contract NamespaceTest is ForkBase {
 
     /// @notice A vacant name resolves to nobody rather than to the owner.
     function test_AVacantNameGoesDark() public {
-        _slot("sponsor", address(0), false);
-        assertEq(namespace.addrOf(_node("sponsor")), address(0));
+        _slot("alpha", address(0), false);
+        assertEq(namespace.addrOf(_node("alpha")), address(0));
     }
 
     function test_TheSameLabelCannotBeSlottedTwice() public {
-        _slot("sponsor", address(0), false);
+        _slot("alpha", address(0), false);
         vm.prank(owner);
         vm.expectRevert();
-        namespace.slotLabel("sponsor", SlotNamespaceBase.LabelKind.COMMON, address(0), bytes32(0), false);
+        namespace.slotLabel("alpha", address(0), bytes32(0), false);
     }
 
     function test_OnlyTheOwnerMaySlot() public {
         vm.prank(alice);
         vm.expectRevert();
-        namespace.slotLabel("sponsor", SlotNamespaceBase.LabelKind.COMMON, address(0), bytes32(0), false);
+        namespace.slotLabel("alpha", address(0), bytes32(0), false);
     }
 
     // ── the name follows the slot ───────────────────────────────────────────
 
     /// @notice The whole premise: buy the slot, hold the name.
     function test_BuyingTheSlotMovesTheName() public {
-        (address slot,) = _slot("sponsor", address(0), false);
-        bytes32 node = _node("sponsor");
+        (address slot,) = _slot("alpha", address(0), false);
+        bytes32 node = _node("alpha");
 
         _take(slot, alice, 1 ether);
         assertEq(namespace.addrOf(node), alice, "alice holds it");
@@ -67,15 +67,15 @@ contract NamespaceTest is ForkBase {
 
     /// @notice Releasing vacates the name. It does NOT unregister it.
     function test_ReleaseVacatesButKeepsTheRegistration() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
         vm.prank(alice);
         ISlot(slot).release();
 
-        assertEq(namespace.addrOf(_node("sponsor")), address(0), "dark");
+        assertEq(namespace.addrOf(_node("alpha")), address(0), "dark");
         assertEq(
-            uint8(registry.getStatus(uint256(keccak256("sponsor")))),
+            uint8(registry.getStatus(uint256(keccak256("alpha")))),
             uint8(IPermissionedRegistry.Status.REGISTERED),
             "but still ours: the name is bound to the slot, not the occupant"
         );
@@ -84,8 +84,8 @@ contract NamespaceTest is ForkBase {
     // ── records ─────────────────────────────────────────────────────────────
 
     function test_TheOccupantOwnsTheRecords() public {
-        (address slot,) = _slot("sponsor", address(0), false);
-        bytes32 node = _node("sponsor");
+        (address slot,) = _slot("alpha", address(0), false);
+        bytes32 node = _node("alpha");
         _take(slot, alice, 1 ether);
 
         vm.prank(alice);
@@ -108,8 +108,8 @@ contract NamespaceTest is ForkBase {
      *      tenancy a different generation from the first.
      */
     function test_RecordsDoNotComeBackWhenAnOccupantDoes() public {
-        (address slot,) = _slot("sponsor", address(0), false);
-        bytes32 node = _node("sponsor");
+        (address slot,) = _slot("alpha", address(0), false);
+        bytes32 node = _node("alpha");
 
         _take(slot, alice, 1 ether);
         vm.prank(alice);
@@ -153,7 +153,7 @@ contract NamespaceTest is ForkBase {
 
     /// @notice An occupant of a subname has no say over the parent's profile.
     function test_OnlyTheOwnerWritesTheParentRecords() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
         vm.prank(alice);
@@ -174,14 +174,14 @@ contract NamespaceTest is ForkBase {
         vm.prank(owner);
         namespace.setParentText("avatar", "https://example.com/pfp.png");
 
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
         vm.prank(alice);
-        namespace.setText(_node("sponsor"), "avatar", "alice.png");
+        namespace.setText(_node("alpha"), "avatar", "alice.png");
 
         _take(slot, bob, 2 ether);
 
-        assertEq(namespace.textOf(_node("sponsor"), "avatar"), "", "the subname's cleared");
+        assertEq(namespace.textOf(_node("alpha"), "avatar"), "", "the subname's cleared");
         assertEq(namespace.textOf(PARENT_NODE, "avatar"), "https://example.com/pfp.png", "the parent's did not");
     }
 
@@ -198,27 +198,27 @@ contract NamespaceTest is ForkBase {
     // ── unslotting ──────────────────────────────────────────────────────────
 
     function test_AVacantLabelCanBeUnslotted() public {
-        _slot("sponsor", address(0), false);
+        _slot("alpha", address(0), false);
 
         vm.prank(owner);
-        namespace.unslotLabel("sponsor");
+        namespace.unslotLabel("alpha");
 
         assertEq(
-            uint8(registry.getStatus(uint256(keccak256("sponsor")))),
+            uint8(registry.getStatus(uint256(keccak256("alpha")))),
             uint8(IPermissionedRegistry.Status.AVAILABLE),
             "back on the market"
         );
-        assertEq(namespace.slotOfNode(_node("sponsor")), address(0));
+        assertEq(namespace.slotOfNode(_node("alpha")), address(0));
     }
 
     /// @notice Never out from under somebody who is paying for it.
     function test_AnOccupiedLabelCannotBeUnslotted() public {
-        (address slot,) = _slot("sponsor", address(0), false);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.SlotOccupied.selector, alice));
-        namespace.unslotLabel("sponsor");
+        namespace.unslotLabel("alpha");
     }
 
     /// @notice And never at all, once promised.
@@ -234,15 +234,15 @@ contract NamespaceTest is ForkBase {
 
     /// @notice Without this a home page cannot list its own contents.
     function test_TheNamespaceListsWhatItHasSlotted() public {
-        _slot("sponsor", address(0), false);
+        _slot("alpha", address(0), false);
         _slot("partner", address(0), false);
 
-        (bytes32[] memory nodes, string[] memory labels, address[] memory slots,) = namespace.listing();
+        (bytes32[] memory nodes, string[] memory labels, address[] memory slots) = namespace.listing();
 
         assertEq(nodes.length, 2);
-        assertEq(labels[0], "sponsor");
+        assertEq(labels[0], "alpha");
         assertEq(labels[1], "partner");
-        assertEq(slots[0], namespace.slotOfNode(_node("sponsor")));
+        assertEq(slots[0], namespace.slotOfNode(_node("alpha")));
         assertEq(namespace.parentName(), "slotsdemo.eth", "the human name, since a node is a hash");
     }
 
@@ -255,57 +255,19 @@ contract NamespaceTest is ForkBase {
         vm.prank(owner);
         namespace.unslotLabel("a");
 
-        (, string[] memory labels,,) = namespace.listing();
+        (, string[] memory labels,) = namespace.listing();
         assertEq(labels.length, 2);
         assertEq(labels[0], "c", "the last one moved into the gap");
         assertEq(labels[1], "b");
     }
 
-    // ── what kind of label it is ────────────────────────────────────────────
-
-    /// @notice The kind is recorded when the label is opened, and listed.
-    function test_ALabelDeclaresWhatKindOfMarketItIs() public {
-        _slot("identity", address(0), false, SlotNamespaceBase.LabelKind.COMMON);
-        _slot("banner", address(0), false, SlotNamespaceBase.LabelKind.SPONSORING);
-
-        (,,, SlotNamespaceBase.LabelKind[] memory kinds) = namespace.listing();
-        assertEq(uint8(kinds[0]), uint8(SlotNamespaceBase.LabelKind.COMMON));
-        assertEq(uint8(kinds[1]), uint8(SlotNamespaceBase.LabelKind.SPONSORING));
-        assertEq(uint8(namespace.kindOfNode(_node("banner"))), uint8(SlotNamespaceBase.LabelKind.SPONSORING));
-    }
-
-    /**
-     * @notice The kind gates NOTHING. It is a declaration to a buyer, and the
-     *         holder of an ordinary label can still publish a sponsor record.
-     */
-    function test_TheKindIsADeclarationAndNotAPermission() public {
-        (address slot,) = _slot("identity", address(0), false, SlotNamespaceBase.LabelKind.COMMON);
-        _take(slot, alice, 1 ether);
-
-        vm.prank(alice);
-        namespace.setText(_node("identity"), "com.ethglobal.sponsor", "{\"v\":1}");
-        assertEq(namespace.textOf(_node("identity"), "com.ethglobal.sponsor"), "{\"v\":1}");
-    }
-
-    /// @notice A mislabelled space can be corrected without evicting anyone.
-    function test_TheKindCanBeCorrectedWhileOccupied() public {
-        (address slot,) = _slot("banner", address(0), false, SlotNamespaceBase.LabelKind.COMMON);
-        _take(slot, alice, 1 ether);
-
-        vm.prank(owner);
-        namespace.setKind("banner", SlotNamespaceBase.LabelKind.SPONSORING);
-
-        assertEq(uint8(namespace.kindOfNode(_node("banner"))), uint8(SlotNamespaceBase.LabelKind.SPONSORING));
-        assertEq(namespace.addrOf(_node("banner")), alice, "and alice still holds it");
-    }
-
     /// @notice Records are the occupant's, and nobody else's — not even the owner.
     function test_OnlyTheOccupantWritesRecords() public {
-        (address slot,) = _slot("banner", address(0), false, SlotNamespaceBase.LabelKind.SPONSORING);
+        (address slot,) = _slot("alpha", address(0), false);
         _take(slot, alice, 1 ether);
 
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(SlotNamespaceBase.NotOccupant.selector, owner, alice));
-        namespace.setText(_node("banner"), "com.ethglobal.sponsor", "not yours");
+        namespace.setText(_node("alpha"), "url", "not yours");
     }
 }

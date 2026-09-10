@@ -54,39 +54,33 @@
     "type": "mapping(bytes32 => bool)"
   },
   {
-    "label": "kindOfNode",
-    "slot": 16,
-    "offset": 0,
-    "type": "mapping(bytes32 => enum SlotNamespaceBase.LabelKind)"
-  },
-  {
     "label": "_slotted",
-    "slot": 17,
+    "slot": 16,
     "offset": 0,
     "type": "bytes32[]"
   },
   {
     "label": "_slottedAt",
-    "slot": 18,
+    "slot": 17,
     "offset": 0,
     "type": "mapping(bytes32 => uint256)"
   },
   {
     "label": "_text",
-    "slot": 19,
+    "slot": 18,
     "offset": 0,
     "type": "mapping(bytes32 => mapping(uint64 => mapping(string => string)))"
   },
   {
     "label": "_parentText",
-    "slot": 20,
+    "slot": 19,
     "offset": 0,
     "type": "mapping(string => string)"
   },
   {
     "label": "__gap",
-    "slot": 21,
+    "slot": 20,
     "offset": 0,
-    "type": "uint256[50]"
+    "type": "uint256[51]"
   }
 ]

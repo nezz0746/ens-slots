@@ -24,7 +24,6 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
     /// @notice One label to open, and the terms that differ per label.
     struct LabelSpec {
         string label;
-        LabelKind kind;
         address hook;
         bytes32 hookData;
         bool permanent;
@@ -42,12 +41,12 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
      *      Economic terms deliberately do not vary: price is self-assessed, so
      *      a better label is priced higher by its own occupant at the same rate.
      */
-    function slotLabel(string calldata label, LabelKind kind, address hook, bytes32 hookData, bool permanent_)
+    function slotLabel(string calldata label, address hook, bytes32 hookData, bool permanent_)
         external
         onlyOwner
         returns (address slot, uint256 tokenId)
     {
-        return _slotOne(LabelSpec({label: label, kind: kind, hook: hook, hookData: hookData, permanent: permanent_}));
+        return _slotOne(LabelSpec({label: label, hook: hook, hookData: hookData, permanent: permanent_}));
     }
 
     /// @notice Open several labels in one transaction. All or nothing — a
@@ -89,12 +88,11 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
 
         slotOfNode[node] = slot;
         labelOfNode[node] = spec.label;
-        kindOfNode[node] = spec.kind;
         _slotted.push(node);
         _slottedAt[node] = _slotted.length;
         if (spec.permanent) permanent[node] = true;
 
-        emit LabelSlotted(node, spec.label, slot, spec.hook, spec.permanent, spec.kind);
+        emit LabelSlotted(node, spec.label, slot, spec.hook, spec.permanent);
     }
 
     /// @dev No expiry: the tax already recycles an abandoned slot, and a second
@@ -134,21 +132,10 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
 
         delete slotOfNode[node];
         delete labelOfNode[node];
-        delete kindOfNode[node];
 
         registry.unregister(uint256(labelhash));
 
         emit LabelUnslotted(node, label);
-    }
-
-    /// @notice Re-declare what kind of market an already-open label is.
-    /// @dev Allowed while occupied: the kind describes the label, not the
-    ///      tenancy, and nothing about the occupant's position changes.
-    function setKind(string calldata label, LabelKind kind) external onlyOwner {
-        bytes32 node = _node(keccak256(bytes(label)));
-        _requireSlot(node);
-        kindOfNode[node] = kind;
-        emit KindChanged(node, kind);
     }
 
     /// @notice Point future registrations at a new resolver — an escape hatch

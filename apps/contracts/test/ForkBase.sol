@@ -7,7 +7,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {SepoliaAddresses} from "../src/Addresses.sol";
 import {SlotNamespace} from "../src/SlotNamespace.sol";
-import {SlotNamespaceBase} from "../src/namespace/SlotNamespaceBase.sol";
 import {SlotNamespaceFactory} from "../src/SlotNamespaceFactory.sol";
 import {SlotNamespaceResolver} from "../src/SlotNamespaceResolver.sol";
 import {SlotNamespaceCuration} from "../src/namespace/SlotNamespaceCuration.sol";
@@ -150,26 +149,15 @@ abstract contract ForkBase is Test {
         return new SlotNamespaceCuration.LabelSpec[](0);
     }
 
-    function _spec(string memory label, SlotNamespaceBase.LabelKind kind)
-        internal
-        pure
-        returns (SlotNamespaceCuration.LabelSpec memory)
-    {
+    function _spec(string memory label) internal pure returns (SlotNamespaceCuration.LabelSpec memory) {
         return SlotNamespaceCuration.LabelSpec({
-            label: label, kind: kind, hook: address(0), hookData: bytes32(0), permanent: false
+            label: label, hook: address(0), hookData: bytes32(0), permanent: false
         });
     }
 
     function _slot(string memory label, address hook, bool permanent) internal returns (address slot, uint256 tokenId) {
-        return _slot(label, hook, permanent, SlotNamespaceBase.LabelKind.COMMON);
-    }
-
-    function _slot(string memory label, address hook, bool permanent, SlotNamespaceBase.LabelKind kind)
-        internal
-        returns (address slot, uint256 tokenId)
-    {
         vm.prank(owner);
-        return namespace.slotLabel(label, kind, hook, bytes32(0), permanent);
+        return namespace.slotLabel(label, hook, bytes32(0), permanent);
     }
 
     /// @dev Buy `slot` for `who` at `price`, funding the protocol's floor.

@@ -13,16 +13,6 @@ import {ISlot, ISlotFactory, SlotInit} from "../interfaces/ISlots.sol";
  *      `pnpm protocol layout` enforces it. Nothing may be `immutable`.
  */
 abstract contract SlotNamespaceBase {
-    /// @notice COMMON is an identity; SPONSORING is an attention space whose
-    ///         payload someone else renders.
-    /// @dev A declaration, not a permission — writes are unrestricted by kind.
-    ///      A vacant label has no record to infer it from, and a buyer needs to
-    ///      know which market they are entering beforehand.
-    enum LabelKind {
-        COMMON,
-        SPONSORING
-    }
-
     /// @notice The UserRegistry holding this parent's subnames.
     IPermissionedRegistry public registry;
 
@@ -54,9 +44,6 @@ abstract contract SlotNamespaceBase {
     /// @notice Nodes whose binding the owner has given up the right to remove.
     mapping(bytes32 node => bool) public permanent;
 
-    /// @notice What kind of market each slotted label is. See {LabelKind}.
-    mapping(bytes32 node => LabelKind) public kindOfNode;
-
     /// @notice Every slotted node. On chain because a client has no other way
     ///         to list them. Unslotting swaps in the last, so order is unstable.
     bytes32[] internal _slotted;
@@ -76,7 +63,7 @@ abstract contract SlotNamespaceBase {
 
     /// @dev Room to append. `script/layout.py` keys on this name.
     // forge-lint: disable-next-line(mixed-case-variable)
-    uint256[50] private __gap;
+    uint256[51] private __gap;
 
     error AlreadySlotted(string label);
     error NotSlotted(bytes32 node);
@@ -87,11 +74,8 @@ abstract contract SlotNamespaceBase {
     error NoResolver();
     error LengthMismatch();
 
-    event LabelSlotted(
-        bytes32 indexed node, string label, address indexed slot, address hook, bool permanent, LabelKind kind
-    );
+    event LabelSlotted(bytes32 indexed node, string label, address indexed slot, address hook, bool permanent);
     event LabelUnslotted(bytes32 indexed node, string label);
-    event KindChanged(bytes32 indexed node, LabelKind kind);
     event ResolverChanged(address indexed resolver);
     event TextChanged(bytes32 indexed node, uint64 indexed tenureId, string key, string value);
     event ParentTextChanged(string key, string value);
