@@ -86,8 +86,16 @@ abstract contract SlotNamespaceBase {
     error OwnershipFollowsTheName();
     error LabelhashMismatch();
     error NothingToWithdraw();
+    error InvalidTax(string label);
 
-    event LabelSlotted(bytes32 indexed node, string label, address indexed slot, address hook, bool permanent);
+    event LabelSlotted(
+        bytes32 indexed node,
+        string label,
+        address indexed slot,
+        uint256 taxBps,
+        uint64 minTenureSeconds,
+        bool permanent
+    );
     event LabelUnslotted(bytes32 indexed node, string label);
     event ResolverChanged(address indexed resolver);
     event TextChanged(bytes32 indexed node, uint64 indexed tenureId, string key, string value);

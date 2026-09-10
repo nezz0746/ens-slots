@@ -47,6 +47,10 @@ interface ISlot {
 
     function taxBps() external view returns (uint256);
 
+    function hook() external view returns (address);
+
+    function hookData() external view returns (bytes32);
+
     function minDepositForBuy(uint256 price_) external view returns (uint256);
 
     function quoteBuy(address account, uint256 depositAmount) external view returns (uint256);

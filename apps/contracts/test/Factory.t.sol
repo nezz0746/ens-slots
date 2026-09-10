@@ -53,7 +53,7 @@ contract FactoryTest is ForkBase {
 
         // The roles are real: the namespace can immediately use them.
         vm.prank(owner);
-        namespace.slotLabel("alpha", address(0), bytes32(0), 0, false);
+        namespace.slotLabel("alpha", TAX_BPS, 0, false);
         assertEq(
             uint8(registry.getStatus(uint256(keccak256("alpha")))), uint8(IPermissionedRegistry.Status.REGISTERED)
         );
@@ -89,8 +89,6 @@ contract FactoryTest is ForkBase {
                 registry: IPermissionedRegistry(reg),
                 parentName: "reused.eth",
                 currency: IERC20(address(0)),
-                taxBps: TAX_BPS,
-                minTenureSeconds: 0,
                 labels: _noLabels()
             })
         );
@@ -109,8 +107,6 @@ contract FactoryTest is ForkBase {
                 registry: IPermissionedRegistry(address(0)),
                 parentName: "slotsdemo.eth",
                 currency: IERC20(address(0)),
-                taxBps: TAX_BPS,
-                minTenureSeconds: 0,
                 labels: _noLabels()
             })
         );
@@ -126,8 +122,6 @@ contract FactoryTest is ForkBase {
                 registry: IPermissionedRegistry(address(0)),
                 parentName: "ownerless.eth",
                 currency: IERC20(address(0)),
-                taxBps: TAX_BPS,
-                minTenureSeconds: 0,
                 labels: _noLabels()
             })
         );

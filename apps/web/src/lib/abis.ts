@@ -32,9 +32,10 @@ const LABEL_SPEC = {
   type: "tuple[]",
   components: [
     { name: "label", type: "string" },
-    { name: "hook", type: "address" },
-    { name: "hookData", type: "bytes32" },
+    // Every label states its own terms. There is nothing to inherit — the
+    // namespace holds the currency and the one hook address, not a rate.
     { name: "taxBps", type: "uint256" },
+    { name: "minTenureSeconds", type: "uint64" },
     { name: "permanent", type: "bool" },
   ],
 } as const;
@@ -149,8 +150,6 @@ export const namespaceFactoryAbi = [
           // overwritten before they reached a slot.
           { name: "parentName", type: "string" },
           { name: "currency", type: "address" },
-          { name: "taxBps", type: "uint256" },
-          { name: "minTenureSeconds", type: "uint64" },
           { ...LABEL_SPEC, name: "labels" },
         ],
       },
@@ -361,9 +360,8 @@ export const namespaceAbi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "label", type: "string" },
-      { name: "hook", type: "address" },
-      { name: "hookData", type: "bytes32" },
       { name: "taxBps", type: "uint256" },
+      { name: "minTenureSeconds", type: "uint64" },
       { name: "permanent_", type: "bool" },
     ],
     outputs: [
@@ -589,6 +587,24 @@ export const slotFactoryAbi = [
 
 /** ENSv2's registry, for the parts the register flow touches. */
 export const ensRegistryAbi = [
+  {
+    type: "function",
+    name: "getTokenId",
+    stateMutability: "view",
+    // A labelhash is NOT a token id. `ownerOf` asked about `keccak(label)`
+    // answers zero for a name that is definitely registered — silently. This
+    // does the conversion, and its answer changes when a name expires and is
+    // registered again.
+    inputs: [{ name: "anyId", type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ type: "address" }],
+  },
   {
     type: "function",
     name: "grantRootRoles",

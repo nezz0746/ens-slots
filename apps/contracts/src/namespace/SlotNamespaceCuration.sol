@@ -21,16 +21,29 @@ import {SlotNamespaceBase} from "./SlotNamespaceBase.sol";
  *      Declares no storage. See {SlotNamespaceBase}.
  */
 abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable {
+    /// @dev The slot's own ceiling, restated so a bad rate fails here with a
+    ///      label attached rather than deep inside `createSlot`.
+    uint256 internal constant MAX_TAX_BPS = 10_000;
+
     /// @notice One label to open, and the terms that differ per label.
+    /**
+     * @notice One label to open, and every economic term it opens on.
+     *
+     * @dev There are no namespace defaults to inherit any more. A rate that
+     *      most labels silently took from somewhere else was a number nobody
+     *      chose for the name it governed — and the form that opened labels
+     *      never offered it, so every label in practice got a value typed once,
+     *      months earlier, for a different question.
+     *
+     *      `minTenureSeconds` is a duration, not a hook: the namespace holds
+     *      the only hook address anybody should be attaching. Zero attaches
+     *      none, which is a real choice — a name nobody is guaranteed to hold
+     *      for any length of time.
+     */
     struct LabelSpec {
         string label;
-        address hook;
-        bytes32 hookData;
-        /// @dev Zero means "inherit the namespace's", exactly as {hook} does.
-        ///      Note the slot itself treats a zero tax as INVALID rather than
-        ///      as absent, so the two words disagree about zero — which is why
-        ///      this one is only ever read here.
         uint256 taxBps;
+        uint64 minTenureSeconds;
         bool permanent;
     }
 
@@ -46,13 +59,18 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
      *      Economic terms deliberately do not vary: price is self-assessed, so
      *      a better label is priced higher by its own occupant at the same rate.
      */
-    function slotLabel(string calldata label, address hook, bytes32 hookData, uint256 taxBps, bool permanent_)
+    function slotLabel(string calldata label, uint256 taxBps, uint64 minTenureSeconds, bool permanent_)
         external
         onlyOwner
         returns (address slot, uint256 tokenId)
     {
         return _slotOne(
-            LabelSpec({label: label, hook: hook, hookData: hookData, taxBps: taxBps, permanent: permanent_})
+            LabelSpec({
+                label: label,
+                taxBps: taxBps,
+                minTenureSeconds: minTenureSeconds,
+                permanent: permanent_
+            })
         );
     }
 
@@ -80,16 +98,16 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
         }
 
         {
+            if (spec.taxBps == 0 || spec.taxBps > MAX_TAX_BPS) revert InvalidTax(spec.label);
+
+            // `_terms` is the currency and the shape, not the terms. Its `hook`
+            // field carries the one hook address this namespace will ever
+            // attach; everything economic comes off the label.
             SlotInit memory init = _terms;
-            // A per-label hook overrides the namespace's. Zero means "use the
-            // namespace's" rather than "no hook", so the common case — every
-            // space on the same terms — needs nothing passed per label.
-            if (spec.hook != address(0)) {
-                init.hook = spec.hook;
-                init.hookData = spec.hookData;
-            }
-            // Same convention as the hook: zero inherits the namespace's rate.
-            if (spec.taxBps != 0) init.taxBps = spec.taxBps;
+            init.taxBps = spec.taxBps;
+            init.hook = spec.minTenureSeconds > 0 ? _terms.hook : address(0);
+            init.hookData =
+                spec.minTenureSeconds > 0 ? bytes32(uint256(spec.minTenureSeconds)) : bytes32(0);
 
             // This namespace is every slot's manager AND its recipient, and
             // both are the same argument. A slot's `manager` and `recipient`
@@ -112,7 +130,7 @@ abstract contract SlotNamespaceCuration is SlotNamespaceBase, OwnableUpgradeable
         _slottedAt[node] = _slotted.length;
         if (spec.permanent) permanent[node] = true;
 
-        emit LabelSlotted(node, spec.label, slot, spec.hook, spec.permanent);
+        emit LabelSlotted(node, spec.label, slot, spec.taxBps, spec.minTenureSeconds, spec.permanent);
     }
 
     /// @dev No expiry: the tax already recycles an abandoned slot, and a second

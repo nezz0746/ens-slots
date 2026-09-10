@@ -5,14 +5,11 @@ import { useState } from "react";
 import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
 import { useTx } from "@/hooks/use-tx";
 import { namespaceAbi } from "@/lib/abis";
 import type { Namespace } from "@/hooks/use-namespaces";
 
-const ZERO = "0x0000000000000000000000000000000000000000" as const;
-const ZERO32 =
-  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 
 /**
  * Put labels on the market. Shown only to whoever opened the namespace.
@@ -32,22 +29,36 @@ const ZERO32 =
  * ── Why a row has no options on it ──────────────────────────────────────────
  *
  * It used to carry three: kind, permanent, and a minimum tenure. The kind was
- * application vocabulary and is gone from the contract entirely; the
- * minimum tenure is a promise the whole namespace makes, set once when it is
- * opened and passed to every slot through the terms; and permanent is off until
- * there is a reason to hand out an irreversible commitment through a form.
+ * application vocabulary and is gone from the contract entirely; permanent is
+ * off until there is a reason to hand out an irreversible commitment through a
+ * form; and the tenure came back, alongside the rate, because there are no
+ * namespace defaults left for a label to inherit.
  *
- * What is left is the only thing that ever differed: the word.
+ * The terms are per BATCH rather than per row. Opening four names at four
+ * different rates is a thing somebody will want eventually, and four rows of
+ * two inputs is not the shape to discover that in — a name opened here can be
+ * repriced afterwards with its own cog.
  */
 export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
   const { address } = useAccount();
   const { send, pending, error } = useTx();
   const [input, setInput] = useState("");
   const [queue, setQueue] = useState<string[]>([]);
+  // The terms every label in this batch opens on. One pair for the batch
+  // rather than per row: opening four names at four rates is a thing somebody
+  // will want eventually, and four rows of two inputs is not the shape to
+  // discover that in. Reprice one afterwards with its own cog.
+  const [tax, setTax] = useState("5");
+  const [days, setDays] = useState("7");
 
   const isOwner =
     !!address && namespace.owner.toLowerCase() === address.toLowerCase();
   if (!isOwner) return null;
+
+  const taxBps = BigInt(Math.round(Number(tax || "0") * 100));
+  const tenureSeconds = BigInt(Math.max(0, Math.round(Number(days || "0")))) * 86_400n;
+  // The contract refuses both, so refuse them here where it costs no gas.
+  const taxValid = taxBps > 0n && taxBps <= 10_000n;
 
   const clean = input.trim().toLowerCase();
   const taken =
@@ -69,12 +80,8 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
       args: [
         queue.map((label) => ({
           label,
-          // Zero means "use the namespace's" for both — the hook carries the
-          // minimum tenure set when the namespace opened, and the rate is its
-          // own. See {SlotNamespaceCuration-_slotOne}.
-          hook: ZERO,
-          hookData: ZERO32,
-          taxBps: 0n,
+          taxBps,
+          minTenureSeconds: tenureSeconds,
           permanent: false,
         })),
       ],
@@ -100,6 +107,37 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
           Add
         </Button>
       </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label htmlFor="label-tax">Tax, per 30 days</Label>
+          <div className="flex items-center gap-1.5">
+            <Input
+              id="label-tax"
+              value={tax}
+              inputMode="decimal"
+              className="h-9"
+              onChange={(e) => setTax(e.target.value)}
+            />
+            <span className="text-xs text-ink-faint">%</span>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="label-tenure">Guaranteed run, days</Label>
+          <Input
+            id="label-tenure"
+            value={days}
+            inputMode="numeric"
+            className="h-9"
+            onChange={(e) => setDays(e.target.value)}
+          />
+        </div>
+      </div>
+      {!taxValid && (
+        <p className="text-[11px] text-hot">
+          A rate is required, above zero and no more than 100%.
+        </p>
+      )}
 
       {taken && (
         <p className="text-[11px] text-warn">{clean} is already open.</p>
@@ -128,7 +166,7 @@ export function SlotLabelForm({ namespace }: { namespace: Namespace }) {
       ))}
 
       {queue.length > 0 && (
-        <Button className="w-full" disabled={!!pending} onClick={open}>
+        <Button className="w-full" disabled={!!pending || !taxValid} onClick={open}>
           {pending === "slot"
             ? "Confirming…"
             : `Open ${queue.length} label${queue.length > 1 ? "s" : ""} — one transaction`}
