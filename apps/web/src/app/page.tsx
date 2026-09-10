@@ -120,7 +120,7 @@ function Snippet() {
     ["k", "await"],
     ["p", " client.getEnsText({\n"],
     ["p", "  name: "],
-    ["s", '"sponsor-1.ethglobal.eth"'],
+    ["s", '"sponsor-1.l2beat.eth"'],
     ["p", ",\n  key: "],
     ["s", '"com.ethglobal.sponsor"'],
     ["p", ",\n});\n\n"],

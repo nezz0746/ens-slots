@@ -253,35 +253,53 @@ take() {                     # $1 = namespace, $2 = label, $3 = pk, $4 = who, $5
 
 # ── the one namespace ───────────────────────────────────────────────────────
 #
-# `ethglobal.eth`, with three sponsoring spaces under it. One name rather than
+# `l2beat.eth`, with three sponsoring spaces under it. One name rather than
 # three, because the point being demonstrated is what a namespace IS — a parent
 # with spaces on the market — and three of them said the same thing three times
 # while taking three times as long to seed.
+#
+# Lowercase, and not a stylistic choice: ENSIP-15 normalises labels to lower
+# case, so `l2Beat` is not a name that can exist. `l2beat` is.
 #
 # `sponsor-1..3` are deliberately plain. Names like `pool` or `press` invited
 # the reading that a space is typed, and it is not: any space can show any of
 # the payload kinds, which is exactly what these three do.
 
-echo "→ ethglobal.eth"
-ETHGLOBAL=$(open_namespace ethglobal "$(spec sponsor-1)" "$(spec sponsor-2)" "$(spec sponsor-3)")
+echo "→ l2beat.eth"
+L2BEAT=$(open_namespace l2beat "$(spec sponsor-1)" "$(spec sponsor-2)" "$(spec sponsor-3)")
 
 # ── what the namespace says about itself ────────────────────────────────────
 #
-# Read off ethglobal.com at seed time rather than pasted in here.
+# Their own ENS records where they have them, the site's meta tags where they
+# do not.
 #
-# `ethglobal.eth` resolves to an address on mainnet and carries no text records
-# at all — checked, not assumed — so there is no ENS profile to copy. What the
-# site serves in its own meta tags is the next most honest source, and it is the
-# same one `packages/sponsor` reads when somebody publishes a link.
+# `l2beat.eth` carries a real profile on mainnet — checked, not assumed — which
+# the name this seed used before did not. So it is copied rather than replaced
+# by a scraped substitute, which is also the more honest demonstration: these
+# are the records the name actually publishes. Read from the ENS registry on
+# mainnet on 2026-09-10:
 #
-# Fetched with a timeout and a fallback: a seed that cannot run without the
-# network would fail for reasons that have nothing to do with the chain, and
-# this is scaffolding, not a test of ethglobal.com's uptime.
+#   avatar        https://l2beat.com/ens-avatar.png
+#   url           https://l2beat.com
+#   com.twitter   https://twitter.com/l2beat
+#   com.github    https://github.com/l2beat
+#   description   unset
+#   header        unset
+#
+# Pasted rather than read at seed time, because the local chain is a SEPOLIA
+# fork and these live on MAINNET — fetching them would mean a second RPC to a
+# second network for four constants that change about never.
+#
+# `description` and `header` are the two ENS has nothing for, so those come off
+# l2beat.com's own meta tags — the same source `packages/sponsor` reads when
+# somebody publishes a link. Fetched with a timeout and a fallback: a seed that
+# cannot run without the network would fail for reasons that have nothing to do
+# with the chain, and this is scaffolding, not a test of l2beat.com's uptime.
 echo "→ profile"
 
 meta() {                     # $1 = property, $2 = fallback
   local html value
-  html=$(curl -sL --max-time 10 -A "Mozilla/5.0" https://ethglobal.com 2>/dev/null || true)
+  html=$(curl -sL --max-time 10 -A "Mozilla/5.0" https://l2beat.com 2>/dev/null || true)
   value=$(printf '%s' "$html" \
     | grep -oiE "<meta[^>]+(property|name)=\"$1\"[^>]*>" \
     | grep -oiE 'content="[^"]*"' \
@@ -289,16 +307,21 @@ meta() {                     # $1 = property, $2 = fallback
   printf '%s' "${value:-$2}"
 }
 
-ETHGLOBAL_TITLE=$(meta "og:title" "ETHGlobal")
-ETHGLOBAL_DESC=$(meta "og:description" "Bringing developers onchain to build the future of the internet.")
-ETHGLOBAL_IMAGE=$(meta "og:image" "https://ethglobal.com/og.png")
+L2BEAT_TITLE=$(meta "og:title" "L2BEAT")
+L2BEAT_DESC=$(meta "og:description" "Track the Ethereum ecosystem in one view: L2s and Ethereum metrics, interoperability flows, privacy protocols and ZK provers, ongoing anomalies, new projects, and the latest additions to L2BEAT.")
+L2BEAT_IMAGE=$(meta "og:image" "https://l2beat.com/static/meta-images/home/opengraph-image.e5c4c254.png")
 
-echo "     $ETHGLOBAL_TITLE — $ETHGLOBAL_DESC"
+echo "     $L2BEAT_TITLE — $L2BEAT_DESC"
 
-set_parent_record "$ETHGLOBAL" avatar      "https://ethglobal.com/favicon.ico"
-set_parent_record "$ETHGLOBAL" header      "$ETHGLOBAL_IMAGE"
-set_parent_record "$ETHGLOBAL" description "$ETHGLOBAL_DESC"
-set_parent_record "$ETHGLOBAL" url         "https://ethglobal.com"
+set_parent_record "$L2BEAT" avatar      "https://l2beat.com/ens-avatar.png"
+set_parent_record "$L2BEAT" header      "$L2BEAT_IMAGE"
+set_parent_record "$L2BEAT" description "$L2BEAT_DESC"
+set_parent_record "$L2BEAT" url         "https://l2beat.com"
+
+# The two links the profile editor offers that nothing else here exercised, so
+# the demo arrives with them set rather than blank.
+set_parent_record "$L2BEAT" com.twitter "https://twitter.com/l2beat"
+set_parent_record "$L2BEAT" com.github  "https://github.com/l2beat"
 
 # ── occupancy ───────────────────────────────────────────────────────────────
 #
@@ -306,8 +329,8 @@ set_parent_record "$ETHGLOBAL" url         "https://ethglobal.com"
 # is most likely to arrive on and the only one from which the buy flow can be
 # demonstrated, so the seed has to leave one.
 echo "→ occupancy"
-take "$ETHGLOBAL" sponsor-1 "$ALICE_PK" "$ALICE" $((900 * USDC))
-take "$ETHGLOBAL" sponsor-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
+take "$L2BEAT" sponsor-1 "$ALICE_PK" "$ALICE" $((900 * USDC))
+take "$L2BEAT" sponsor-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
 
 # ── what the spaces are showing ─────────────────────────────────────────────
 #
@@ -320,10 +343,10 @@ take "$ETHGLOBAL" sponsor-2 "$BOB_PK"   "$BOB"   $((300 * USDC))
 echo "→ records"
 
 # an ordinary page
-set_record "$ETHGLOBAL" sponsor-1 "$ALICE_PK" '{"v":1,"type":"url","data":{"url":"https://splits.org"},"metadata":{"name":"Splits | Process revenue, move money, run operations globally","image":"https://splits.org/logo_compressed.svg","tagline":"Process revenue, move money, and run operations instantly, anywhere in the world. Treasury and personal accounts, agent-ready tools, and ope","host":"splits.org"}}'
+set_record "$L2BEAT" sponsor-1 "$ALICE_PK" '{"v":1,"type":"url","data":{"url":"https://splits.org"},"metadata":{"name":"Splits | Process revenue, move money, run operations globally","image":"https://splits.org/logo_compressed.svg","tagline":"Process revenue, move money, and run operations instantly, anywhere in the world. Treasury and personal accounts, agent-ready tools, and ope","host":"splits.org"}}'
 
 # a token
-set_record "$ETHGLOBAL" sponsor-2 "$BOB_PK" '{"v":1,"type":"token","data":{"chainId":8453,"address":"0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b"},"metadata":{"name":"BankrCoin","image":"https://coin-images.coingecko.com/coins/images/52626/large/bankr-static.png?1736405365","tagline":"BNKR on Base","symbol":"BNKR","chainLabel":"Base"}}'
+set_record "$L2BEAT" sponsor-2 "$BOB_PK" '{"v":1,"type":"token","data":{"chainId":8453,"address":"0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b"},"metadata":{"name":"BankrCoin","image":"https://coin-images.coingecko.com/coins/images/52626/large/bankr-static.png?1736405365","tagline":"BNKR on Base","symbol":"BNKR","chainLabel":"Base"}}'
 
 # The app's address book, regenerated from the ledgers this deploy just wrote
 # and the constants in `Addresses.sol`. Every chain with a ledger gets an entry,
@@ -333,4 +356,4 @@ set_record "$ETHGLOBAL" sponsor-2 "$BOB_PK" '{"v":1,"type":"token","data":{"chai
 echo
 echo "  namespace factory  $NSF"
 echo "  resolver           $RESOLVER"
-echo "  ethglobal.eth      $ETHGLOBAL"
+echo "  l2beat.eth         $L2BEAT"
