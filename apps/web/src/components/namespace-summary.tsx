@@ -62,15 +62,6 @@ export function NamespaceSummary({
   const isOwner =
     !!address && namespace.owner.toLowerCase() === address.toLowerCase();
 
-  // The namespace's DEFAULT rate, and only that.
-  //
-  // This used to read the first slot's rate and call it the namespace's, which
-  // was true right up until labels could be opened on their own terms. Now
-  // `base` sits at 10% while the namespace's default is 5%, and taking the
-  // first answer would have printed one name's rate as though it governed all
-  // of them. The per-name rate belongs on the per-name panel; this is the
-  // number a new label inherits.
-  const taxBps = namespace.defaultTaxBps;
 
   const monthly = held.reduce(
     (sum, s) => sum + rentFor(MONTH_SECONDS, s.state!.price, s.state!.taxBps),
@@ -129,9 +120,6 @@ export function NamespaceSummary({
             {isOwner ? "you" : shortAddress(namespace.owner)}
           </span>
         </p>
-        {taxBps !== undefined && (
-          <Stat label="Default tax" value={`${Number(taxBps) / 100}% / 30d`} />
-        )}
         <Stat
           label="Collectable"
           value={

@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { useAddresses } from "@/hooks/use-addresses";
 import type { Subname } from "@/hooks/use-namespaces";
@@ -177,7 +179,27 @@ function Figures({
       )}
     >
       <Figure label="Valuation" value={formatAmount(state.price)} compact={compact} />
-      <Figure label="Rent" value={`${formatAmount(perMonth)}/mo`} compact={compact} />
+      {/*
+        * The rate rides with the rent, because it is the rent's explanation.
+        *
+        * It used to be a namespace-wide figure in the page header, which was
+        * true only while every label shared one — `base` is at 10% against a
+        * 5% default. A rate stated once for the namespace would now be wrong
+        * about most of its names; stated beside the monthly figure it derives,
+        * it is right about exactly the name being looked at.
+        */}
+      <Figure
+        label="Rent"
+        value={
+          <>
+            {formatAmount(perMonth)}/mo{" "}
+            <span className="text-[11px] font-normal text-ink-faint">
+              ({Number(state.taxBps) / 100}%)
+            </span>
+          </>
+        }
+        compact={compact}
+      />
       <Figure
         label="Runway"
         value={state.isVacant ? "—" : describeDays(runway)}
@@ -199,7 +221,7 @@ function Figure({
   compact,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   className?: string;
   compact?: boolean;
 }) {
