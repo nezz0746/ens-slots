@@ -14,7 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, useReadContract } from "wagmi";
 
 import { RunwayChoice } from "@/components/runway-choice";
-import { Badge } from "@/components/ui/badge";
+import { Status } from "@/components/market-figures";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/input";
 import { ValuationInput } from "@/components/valuation-input";
@@ -39,7 +39,6 @@ import {
   rentFor,
   runwaySeconds,
   runwayTone,
-  TONE_LABEL,
   TONE_TEXT,
 } from "@/lib/runway";
 import { cn } from "@/lib/utils";
@@ -82,14 +81,18 @@ export function SlotPanel({
 
   return (
     <div>
-      <header className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+      {/*
+        * The figures moved out to sit under the name; see {MarketFigures}.
+        * What is left is the controls, so the heading names the act rather
+        * than the subject — "The market" over a form was labelling the topic
+        * of the page, not the thing in the box.
+        */}
+      <header className="flex items-center justify-between gap-3 border-b border-line px-4 pt-4 pb-3">
         <h2 className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
-          The market
+          {isVacant ? "Take it" : isOccupant ? "Your position" : "Take it from them"}
         </h2>
         <Status subname={subname} />
       </header>
-
-      {state && <Figures state={state} />}
 
       <div className="space-y-4 px-4 py-4">
         {isVacant ? (
@@ -129,79 +132,6 @@ export function SlotPanel({
   );
 }
 
-function Status({ subname }: { subname: Subname }) {
-  const s = subname.state;
-  if (!s) return null;
-  if (s.isVacant) return <Badge tone="brand">Available</Badge>;
-  if (s.isInsolvent) return <Badge tone="bad">Liquidatable</Badge>;
-  const tone = runwayTone(s.secondsUntilLiquidation, s.minDepositSeconds);
-  return (
-    <Badge tone={tone === "safe" ? "good" : "warn"}>{TONE_LABEL[tone]}</Badge>
-  );
-}
-
-/**
- * The three numbers the decision turns on, edge to edge.
- *
- * Valuation, what holding it costs per month, and how long the escrow lasts —
- * three because they are the whole trade in order: what you say it is worth,
- * what saying that costs you, how long you have paid for.
- *
- * Escrow and rate used to sit here too and were the wrong kind of true. The
- * rate is a constant of the namespace, the same on every row; and the escrow
- * only means anything divided by the rent, which is the runway. Four figures
- * where two were derivable made the row longer and the decision no clearer.
- *
- * Full-bleed with dividers rather than a padded box. Three figures in a box
- * inside a card is two frames around one row.
- */
-function Figures({ state }: { state: NonNullable<Subname["state"]> }) {
-  // The slot's own answer, not `runwaySeconds` on the deposit. They differ:
-  // this one accounts for tax accrued since the last settlement, so it is the
-  // number that decides an actual liquidation. Computing it here as well would
-  // give the badge and the figure two sources for one fact.
-  const runway = state.isVacant ? 0n : state.secondsUntilLiquidation;
-  const tone = runwayTone(runway, state.minDepositSeconds);
-  const perMonth = rentFor(MONTH_SECONDS, state.price, state.taxBps);
-
-  return (
-    <dl className="grid grid-cols-3 divide-x divide-line border-y border-line bg-canvas/50">
-      <Figure label="Valuation" value={formatAmount(state.price)} />
-      <Figure label="Rent" value={`${formatAmount(perMonth)}/mo`} />
-      <Figure
-        label="Runway"
-        value={state.isVacant ? "—" : describeDays(runway)}
-        className={state.isVacant ? undefined : TONE_TEXT[tone]}
-      />
-    </dl>
-  );
-}
-
-function Figure({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: string;
-  className?: string;
-}) {
-  return (
-    <div className="min-w-0 px-3 py-2.5">
-      <dt className="text-[10px] font-medium tracking-wide text-ink-faint uppercase">
-        {label}
-      </dt>
-      <dd
-        className={cn(
-          "mt-0.5 truncate text-sm font-semibold tabular-nums",
-          className,
-        )}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
 
 /**
  * Buying, whether from nobody or from somebody.

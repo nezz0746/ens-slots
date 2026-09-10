@@ -55,6 +55,12 @@ export function NamespaceSummary({
 
   const held = namespace.subnames.filter((s) => s.state && !s.state.isVacant);
 
+  // The rate is a constant of the namespace — every slot here was created from
+  // the same terms — so it is read off whichever one answered first and stated
+  // ONCE, here. It used to sit on every subname's figures, where it was the
+  // same number repeated as though it might not be.
+  const taxBps = namespace.subnames.find((s) => s.state)?.state?.taxBps;
+
   const monthly = held.reduce(
     (sum, s) => sum + rentFor(MONTH_SECONDS, s.state!.price, s.state!.taxBps),
     0n,
@@ -93,6 +99,9 @@ export function NamespaceSummary({
           value={`${trim(monthly)} ${SYMBOL}/mo`}
           sub={showUsd ? formatUsd(usdOf(monthly, price)) : null}
         />
+        {taxBps !== undefined && (
+          <Stat label="Tax" value={`${Number(taxBps) / 100}% / 30d`} />
+        )}
         <Stat
           label="Collectable"
           value={
