@@ -158,7 +158,9 @@ export function OgFrame({
         <div
           style={{
             display: "flex",
-            fontSize: 86,
+            // Bigger with no strip below it. A card is read as a thumbnail
+            // first, and the title is the only part that survives that.
+            fontSize: facts.length > 0 ? 86 : 104,
             fontWeight: 700,
             color: INK,
             lineHeight: 1.05,
@@ -173,11 +175,11 @@ export function OgFrame({
         <div
           style={{
             display: "flex",
-            fontSize: 30,
+            fontSize: facts.length > 0 ? 30 : 34,
             fontWeight: 500,
             color: INK_SOFT,
             lineHeight: 1.4,
-            maxWidth: 860,
+            maxWidth: 900,
           }}
         >
           {subtitle}
