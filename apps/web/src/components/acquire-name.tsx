@@ -3,6 +3,7 @@
 import { Check, Clock, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/input";
 import { useBatch, useTx } from "@/hooks/use-tx";
 import { ethRegistrarAbi, mockUsdcAbi } from "@/lib/abis";
+import { formatAmount } from "@/lib/format";
 import { useAddresses, useIsLocal } from "@/hooks/use-addresses";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +60,7 @@ export function AcquireName({
   const addresses = useAddresses();
   const isLocal = useIsLocal();
   const { send, pending, error } = useTx();
+  const queryClient = useQueryClient();
   /**
    * Approving and committing touch two different contracts, so no contract can
    * put them in one transaction — only the wallet can. Batched where the wallet
@@ -134,6 +137,32 @@ export function AcquireName({
   const total = price ? price[0] + price[1] : 0n;
   const approved = (allowance ?? 0n) >= total && total > 0n;
   const funded = (balance ?? 0n) >= total && total > 0n;
+
+  /**
+   * Mint exactly what is missing, from the step that is short.
+   *
+   * `mint` is open to anyone on this token — no owner, no minter role — which
+   * is what makes this honest rather than a local-only shortcut; see the note
+   * on {UsdcWidget}. The shortfall rather than a round 100, so the button can
+   * say what it will do.
+   */
+  const shortfall = total > (balance ?? 0n) ? total - (balance ?? 0n) : 0n;
+  const mintShortfall = async () => {
+    if (!address || shortfall === 0n) return;
+    const ok = await send("mint", {
+      address: addresses.mockUsdc,
+      abi: mockUsdcAbi,
+      functionName: "mint",
+      args: [address, shortfall],
+    });
+    if (!ok) return;
+    // Read the balance back rather than waiting for its interval. The step
+    // this unblocks is the one directly above the button, and React Query
+    // pauses interval refetching while the tab is unfocused — so "poll in five
+    // seconds" can mean "never", and the money arrives with nothing on screen
+    // acknowledging it.
+    await queryClient.invalidateQueries({ queryKey: ["readContracts"] });
+  };
   const wait = Number(minAge ?? 60n);
   const elapsed = committedAt ? now - committedAt : 0;
   const ready = committedAt !== null && elapsed >= wait;
@@ -306,13 +335,24 @@ export function AcquireName({
         title={folded ? "Approve and commit" : "Approve the registrar"}
         note={
           !funded
-            ? "You do not hold enough — mint some from the header."
+            ? "You do not hold enough to pay the fee."
             : folded
               ? "One signature: the fee allowance and the commitment together."
               : "It pulls the fee from you when you register."
         }
         done={folded ? committedAt !== null : approved}
         ready={!!address && funded && (folded ? committedAt === null : !approved)}
+        blocked={
+          !!address && !funded && shortfall > 0n
+            ? {
+                label:
+                  pending === "mint"
+                    ? "Minting…"
+                    : `Mint ${formatAmount(shortfall)}`,
+                onRun: mintShortfall,
+              }
+            : null
+        }
         busy={pending === "approve" || batch.pending === "acquire"}
         error={
           pending === null && !approved ? (error ?? batch.error) : null
@@ -391,6 +431,7 @@ function Step({
   ready,
   busy,
   onRun,
+  blocked,
   error,
 }: {
   n: number;
@@ -400,6 +441,16 @@ function Step({
   ready: boolean;
   busy: boolean;
   onRun: () => void;
+  /**
+   * What to press when the step is blocked by something it can fix itself.
+   *
+   * A step waiting on an EARLIER step shows nothing, which is right — there is
+   * nothing to do there yet. Being short of the fee is not that: there is a
+   * remedy, it is one call, and the note used to point at a button in the site
+   * header several hundred pixels away. Pointing somewhere else is what a
+   * screen does when it has run out of ideas.
+   */
+  blocked?: { label: string; onRun: () => void } | null;
   /**
    * Shown here rather than at the foot of the card.
    *
@@ -436,6 +487,10 @@ function Step({
       ) : ready || busy ? (
         <Button size="sm" disabled={busy} onClick={onRun}>
           {busy ? <Loader2 className="animate-spin" /> : "Run"}
+        </Button>
+      ) : blocked ? (
+        <Button size="sm" variant="outline" onClick={blocked.onRun}>
+          {blocked.label}
         </Button>
       ) : null}
     </div>
