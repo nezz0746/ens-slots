@@ -38,14 +38,14 @@ library SepoliaAddresses {
     address internal constant ENS_MOCK_DAI = 0x93403a98c3A6be906585CD0D68447c0Fc600FB38;
 
     /// @notice Creates one continuously taxed slot per slotted label.
-    address internal constant SLOT_FACTORY = 0x14df7d78ef556A80F0AD3ede3F10F1e24f92E1cE;
+    address internal constant SLOT_FACTORY = 0x4416f23E3d8de4E35937448FD221549b6E38483B;
 
     /// @notice The beacon implementation every slot proxy delegates to.
-    address internal constant SLOT_IMPLEMENTATION = 0xfc2Bf27aD41C9C4B23b675Ef5c270161Ab87f530;
+    address internal constant SLOT_IMPLEMENTATION = 0xfc2c57aF25f3E12a25475d4645ef9Cd94cD34168;
 
     /// @notice A window inside which an occupant cannot be outbid cheaply.
     ///         Optional per label.
-    address internal constant MINIMUM_TENURE_HOOK = 0xB1e68532Ba467b2310A931abcDD682E718426c9C;
+    address internal constant MINIMUM_TENURE_HOOK = 0x32dc981b9622B8ae5e90716ED07a275cCAd1Ba9F;
 
-    address internal constant ADLAND_HOOK = 0xA8079a3226C29D0D91DaDc698823Fd3cE96D7Ee7;
+    address internal constant ADLAND_HOOK = 0x27b8E0D543547D6094ACf3592d17a74f43d6B899;
 }
