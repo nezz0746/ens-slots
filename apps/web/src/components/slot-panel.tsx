@@ -2,7 +2,6 @@
 
 import {
   ArrowRight,
-  Coins,
   Gavel,
   Loader2,
   LogOut,
@@ -754,46 +753,30 @@ function Communal({
 }) {
   const s = subname.state;
   if (!s) return null;
+  // Liquidation only. Collecting one slot used to sit here too, beside a
+  // "Collect all" in the header that does the same thing for every slot at
+  // once — two buttons for one act, and the per-slot one paid the namespace
+  // rather than anybody looking at it, which made it the more confusing half.
   const canLiquidate = s.isInsolvent && !s.isVacant;
-  const canCollect = s.taxOwed > 0n;
-  if (!canLiquidate && !canCollect) return null;
+  if (!canLiquidate) return null;
 
   return (
     <div className="flex gap-2 border-t border-line px-4 py-3">
-      {canLiquidate && (
-        <Button
-          variant="danger"
-          size="sm"
-          disabled={!!pending}
-          onClick={() =>
-            send("liquidate", {
-              address: subname.slot,
-              abi: slotAbi,
-              functionName: "liquidate",
-            })
-          }
-        >
-          <Gavel />
-          Liquidate
-        </Button>
-      )}
-      {canCollect && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!!pending}
-          onClick={() =>
-            send("collect", {
-              address: subname.slot,
-              abi: slotAbi,
-              functionName: "collect",
-            })
-          }
-        >
-          <Coins />
-          Collect {formatAmount(s.taxOwed)}
-        </Button>
-      )}
+      <Button
+        variant="danger"
+        size="sm"
+        disabled={!!pending}
+        onClick={() =>
+          send("liquidate", {
+            address: subname.slot,
+            abi: slotAbi,
+            functionName: "liquidate",
+          })
+        }
+      >
+        <Gavel />
+        Liquidate
+      </Button>
     </div>
   );
 }

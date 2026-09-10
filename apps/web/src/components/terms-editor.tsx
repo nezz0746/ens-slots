@@ -1,11 +1,12 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Loader2, Settings2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input, Label } from "@/components/ui/input";
 import { useAddresses } from "@/hooks/use-addresses";
 import type { Namespace, Subname } from "@/hooks/use-namespaces";
@@ -26,15 +27,21 @@ const ZERO32 = `0x${"0".repeat(64)}` as const;
  * ever queues a change: it ripens, and lands at the next occupancy transition.
  * Whoever is holding the name keeps the terms they agreed to until they leave.
  *
- * So the form says "queue", never "set", and the panel everyone can see says
+ * So the button says "queue", never "set", and the panel everyone can see says
  * what is queued. A change nobody could see coming would be the trap.
  *
- * ── Why zero is not a value here ────────────────────────────────────────────
+ * ── Prefilled, and dirtiness decides what travels ───────────────────────────
  *
- * Opening a label, zero tax means "inherit the namespace's rate". Proposing
- * one, the slot rejects zero outright. The same number means two different
- * things a screen apart, so this form never sends a rate the owner did not
- * type — the checkbox decides whether tax travels at all.
+ * Both fields open showing what is true today, and a field that still says what
+ * it said is not sent. That replaces two checkboxes which asked the owner to
+ * declare an intention they had already expressed by typing — and which, left
+ * unticked beside an edited number, silently discarded the edit.
+ *
+ * It also keeps the app away from a real trap in the contracts: opening a
+ * label, a zero rate means "inherit the namespace's"; proposing one, the slot
+ * rejects zero outright. The same number, two meanings, one screen apart.
+ * Nothing here can send a rate nobody typed, because the only rate it can send
+ * is one that differs from the rate on screen.
  */
 export function TermsEditor({
   namespace,
@@ -45,7 +52,7 @@ export function TermsEditor({
 }) {
   const { address } = useAccount();
   const addresses = useAddresses();
-  const { send, pending, error } = useTx();
+  const { send, pending, error, clearError } = useTx();
   const queryClient = useQueryClient();
 
   const state = subname.state;
@@ -53,28 +60,46 @@ export function TermsEditor({
     !!address && namespace.owner.toLowerCase() === address.toLowerCase();
 
   const [open, setOpen] = useState(false);
-  const [changeTax, setChangeTax] = useState(false);
-  const [tax, setTax] = useState(() =>
-    state ? String(Number(state.taxBps) / 100) : "5",
-  );
-  const [changeHook, setChangeHook] = useState(false);
-  const [days, setDays] = useState("7");
+  const [tax, setTax] = useState("");
+  const [days, setDays] = useState("");
+
+  // What is true right now, spelled the way the fields spell it — so a
+  // comparison against what is typed is a string comparison and nothing has to
+  // round-trip through a bigint to decide whether it changed.
+  const currentTax = state ? String(Number(state.taxBps) / 100) : "";
+  const currentDays =
+    state &&
+    state.hook.toLowerCase() === addresses.minimumTenureHook.toLowerCase()
+      ? String(BigInt(state.hookData) / DAY_SECONDS)
+      : "0";
+
+  // Re-seeded when the dialog OPENS, not once on mount. The chain moves
+  // underneath this — a proposal lands, somebody takes the name — and a form
+  // that opened showing a stale rate would consider it dirty and send it back.
+  useEffect(() => {
+    if (!open) return;
+    setTax(currentTax);
+    setDays(currentDays);
+    clearError();
+    // Deliberately only on `open`: re-seeding while it is open would fight the
+    // person typing in it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!isOwner || !state) return null;
 
-  // Read out here rather than inside `cancel`: a function declaration does not
-  // carry the narrowing from the early return above it.
   const pendingTax = state.pendingHasTax;
   const pendingHook = state.pendingHasHook;
   const queued = pendingTax || pendingHook;
-  const taxBps = BigInt(Math.round(Number(tax || "0") * 100));
-  const tenureSeconds = BigInt(Math.max(0, Math.round(Number(days || "0")))) * DAY_SECONDS;
 
-  // The slot refuses a zero rate, and refuses a hook without data or data
-  // without a hook — so the two always move together, and zero days means
-  // detaching the hook rather than a hook that guarantees nothing.
+  const taxBps = BigInt(Math.round(Number(tax || "0") * 100));
+  const tenureSeconds =
+    BigInt(Math.max(0, Math.round(Number(days || "0")))) * DAY_SECONDS;
+
+  const changeTax = tax.trim() !== currentTax;
+  const changeHook = days.trim() !== currentDays;
   const taxValid = !changeTax || (taxBps > 0n && taxBps <= 10_000n);
-  const nothingChosen = !changeTax && !changeHook;
+  const nothing = !changeTax && !changeHook;
 
   async function propose() {
     const ok = await send("terms", {
@@ -92,124 +117,114 @@ export function TermsEditor({
         changeHook,
       ],
     });
-    if (ok) {
-      setOpen(false);
-      setChangeTax(false);
-      setChangeHook(false);
-      // Re-read now. The banner this queues is drawn from `getSlotInfo`, which
-      // is polled — without this the form closed on success and nothing on the
-      // page changed, which reads as the transaction having done nothing.
-      // wagmi's key prefix — the same reads back several figures across two
-      // components, which is why `use-collect-all` invalidates the same way.
-      await queryClient.invalidateQueries({ queryKey: ["readContracts"] });
-    }
+    if (!ok) return;
+    setOpen(false);
+    // Re-read now. The banner this queues is drawn from `getSlotInfo`, which is
+    // polled — without this the dialog closed on success and nothing on the
+    // page changed, which reads as the transaction having done nothing.
+    await queryClient.invalidateQueries({ queryKey: ["readContracts"] });
   }
 
   async function cancel() {
-    await send("terms", {
+    const ok = await send("terms", {
       address: namespace.address,
       abi: namespaceAbi,
       functionName: "cancelLabelTerms",
       args: [subname.label, pendingTax, pendingHook],
     });
-    // wagmi's key prefix — the same reads back several figures across two
-      // components, which is why `use-collect-all` invalidates the same way.
-      await queryClient.invalidateQueries({ queryKey: ["readContracts"] });
-  }
-
-  if (!open) {
-    return (
-      <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-          {queued ? "Change what's queued" : "Change the terms"}
-        </Button>
-        {queued && (
-          <Button size="sm" variant="ghost" disabled={!!pending} onClick={cancel}>
-            {pending === "terms" ? <Loader2 className="animate-spin" /> : null}
-            Cancel it
-          </Button>
-        )}
-      </div>
-    );
+    if (!ok) return;
+    setOpen(false);
+    await queryClient.invalidateQueries({ queryKey: ["readContracts"] });
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-line p-3">
-      <p className="text-[11px] leading-relaxed text-ink-faint">
-        Queued, not applied. It ripens, then lands the next time this name
-        changes hands — whoever holds it now keeps what they agreed to.
-      </p>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={queued ? "Terms — a change is queued" : "Change the terms"}
+        aria-label="Change the terms"
+        className="relative shrink-0 rounded-lg p-1.5 text-ink-faint transition-colors hover:bg-canvas hover:text-ink"
+      >
+        <Settings2 className="size-4" />
+        {/* A queued change is worth seeing without opening anything. */}
+        {queued && (
+          <span className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-warn" />
+        )}
+      </button>
 
-      <label className="flex items-center gap-2 text-xs">
-        <input
-          type="checkbox"
-          checked={changeTax}
-          onChange={(e) => setChangeTax(e.target.checked)}
-        />
-        <span>Tax rate</span>
-      </label>
-      {changeTax && (
-        <div className="space-y-1">
-          <Label htmlFor="newtax">Per 30 days</Label>
-          <div className="flex items-center gap-2">
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title={`${subname.label}.${namespace.parentName}`}
+        description="Queued, not applied. A change ripens and lands the next time this name changes hands — whoever holds it now keeps what they agreed to."
+        className="max-w-sm"
+      >
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="terms-tax">Tax rate, per 30 days</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="terms-tax"
+                value={tax}
+                inputMode="decimal"
+                onChange={(e) => setTax(e.target.value)}
+                className="h-9"
+              />
+              <span className="text-xs text-ink-faint">%</span>
+            </div>
+            {!taxValid && (
+              <p className="text-[11px] text-hot">
+                Between 0 and 100, and not zero — the slot rejects a zero rate.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="terms-tenure">Guaranteed run, in days</Label>
             <Input
-              id="newtax"
-              value={tax}
-              inputMode="decimal"
-              onChange={(e) => setTax(e.target.value)}
+              id="terms-tenure"
+              value={days}
+              inputMode="numeric"
+              onChange={(e) => setDays(e.target.value)}
               className="h-9"
             />
-            <span className="text-xs text-ink-faint">%</span>
+            <p className="text-[11px] text-ink-faint">
+              How long a holder cannot be outbid. Zero removes the guarantee.
+            </p>
           </div>
-          {!taxValid && (
-            <p className="text-[11px] text-hot">
-              Between 0 and 100, and not zero — the slot rejects a zero rate.
+
+          {queued && (
+            <p className="rounded-lg bg-warn-soft px-3 py-2 text-[11px] leading-relaxed text-warn">
+              A change is already queued. Sending another replaces it.
             </p>
           )}
+
+          {error && <p className="text-[11px] text-hot">{error}</p>}
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="flex-1"
+              disabled={nothing || !taxValid || !!pending}
+              onClick={propose}
+            >
+              {pending === "terms" ? <Loader2 className="animate-spin" /> : null}
+              {nothing ? "Nothing changed" : "Queue it"}
+            </Button>
+            {queued && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={!!pending}
+                onClick={cancel}
+              >
+                Drop the queued one
+              </Button>
+            )}
+          </div>
         </div>
-      )}
-
-      <label className="flex items-center gap-2 text-xs">
-        <input
-          type="checkbox"
-          checked={changeHook}
-          onChange={(e) => setChangeHook(e.target.checked)}
-        />
-        <span>Guaranteed run</span>
-      </label>
-      {changeHook && (
-        <div className="space-y-1">
-          <Label htmlFor="newtenure">Days a holder cannot be outbid</Label>
-          <Input
-            id="newtenure"
-            value={days}
-            inputMode="numeric"
-            onChange={(e) => setDays(e.target.value)}
-            className="h-9"
-          />
-          <p className="text-[11px] text-ink-faint">
-            Zero removes the guarantee entirely — anyone could be outbid the
-            moment after they pay.
-          </p>
-        </div>
-      )}
-
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          className="flex-1"
-          disabled={nothingChosen || !taxValid || !!pending}
-          onClick={propose}
-        >
-          {pending === "terms" ? <Loader2 className="animate-spin" /> : null}
-          Queue it
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Cancel
-        </Button>
-      </div>
-
-      {error && <p className="text-[11px] text-hot">{error}</p>}
-    </div>
+      </Dialog>
+    </>
   );
 }

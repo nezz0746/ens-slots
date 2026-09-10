@@ -51,10 +51,15 @@ export function NameDetails({
   return (
     <div className="space-y-4">
       <header className="space-y-0.5">
-        <h2 className="min-w-0 truncate text-xl font-semibold tracking-tight">
-          {subname.label}
-          <span className="text-ink-faint">.{namespace.parentName}</span>
-        </h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0 truncate text-xl font-semibold tracking-tight">
+            {subname.label}
+            <span className="text-ink-faint">.{namespace.parentName}</span>
+          </h2>
+          {/* Owner-only, and it renders nothing for anybody else — so the row
+              is a title alone unless there is something to press. */}
+          <TermsEditor namespace={namespace} subname={subname} />
+        </div>
         <p className="text-xs text-ink-faint">
           {vacant ? (
             "Nobody holds this"
@@ -70,8 +75,6 @@ export function NameDetails({
       </header>
 
       <MarketFigures subname={subname} />
-
-      <TermsEditor namespace={namespace} subname={subname} />
 
       <Records
         name={name}
