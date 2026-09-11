@@ -66,6 +66,7 @@ clear on turnover and do not come back if the same person retakes the name.
 apps/contracts/   Foundry — contracts, fork tests, the deploy CLI
 apps/web/         Next.js — the app
 scripts/          the local stack: chain, seed, dev, protocol
+docs/protocol.md  the whole thing in five diagrams
 ENSV2.txt         working reference for ENSv2, incl. what the docs get wrong
 ```
 
