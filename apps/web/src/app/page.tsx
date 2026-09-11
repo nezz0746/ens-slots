@@ -41,10 +41,8 @@ export default function Home() {
             <span className="text-brand">Taxable</span> subnames
           </h1>
           <p className="max-w-xl text-sm leading-relaxed text-ink-soft">
-            Open subnames of a name you own. Whoever holds one sets what it is
-            worth and pays tax on that number for as long as they keep it —
-            which is also the price anyone can take it from them at. Nothing can
-            be squatted, and the name resolves through plain ENS.
+            Open slots and earn tax income from always-on, self-priced,
+            never-squatted subnames.
           </p>
         </div>
 

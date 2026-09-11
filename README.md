@@ -1,6 +1,6 @@
 ![Nameslots — taxable subnames on ENS](./banner.png)
 
-**Taxable subnames. Self-priced, continuously taxed, never squattable.**
+**Taxable subnames.** Open slots and earn tax income from always-on, self-priced, never-squatted subnames.
 
 Own `l2beat.eth`, open `base.l2beat.eth` to anyone. Whoever holds it sets its
 own price, pays tax on that price continuously, and can be taken out by anyone
@@ -41,7 +41,7 @@ real registry and the real `SlotFactory` — not mocks. Without
 ## Four ideas
 
 **The name never moves.** A slotted subname stays registered to the namespace
-contract permanently. What follows the holder is *resolution*: `addr()` returns
+contract permanently. What follows the holder is _resolution_: `addr()` returns
 whoever occupies the slot, read at the moment you ask. A turnover writes
 nothing to the registry, so nothing about it can fail.
 
@@ -52,7 +52,7 @@ and both move to the buyer in the same block, with no transaction.
 
 **Terms belong to the label.** There are no namespace defaults. Every label is
 opened with its own tax rate and its own guaranteed run. The owner can change
-either afterwards, but the change only *queues* — 0xSlots ripens it and applies
+either afterwards, but the change only _queues_ — 0xSlots ripens it and applies
 it at the next turnover, so nothing moves under somebody who already paid.
 
 **Records belong to the tenancy.** Keyed by the slot's `tenureId`, so they
@@ -70,11 +70,11 @@ docs/protocol.md  the whole thing in five diagrams
 ENSV2.txt         working reference for ENSv2, incl. what the docs get wrong
 ```
 
-| Contract | |
-|---|---|
-| `SlotNamespace` | One parent name's subnames. Beacon proxy; assembled from `namespace/`. |
-| `SlotNamespaceFactory` | The index, the beacon owner, and `open`. UUPS proxy. |
-| `SlotNamespaceResolver` | One `IExtendedResolver` for every namespace. UUPS proxy. |
+| Contract                |                                                                        |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `SlotNamespace`         | One parent name's subnames. Beacon proxy; assembled from `namespace/`. |
+| `SlotNamespaceFactory`  | The index, the beacon owner, and `open`. UUPS proxy.                   |
+| `SlotNamespaceResolver` | One `IExtendedResolver` for every namespace. UUPS proxy.               |
 
 Only `SlotNamespaceBase` declares storage — that is what makes splitting a
 beacon implementation across several files safe, since Solidity lays out base
@@ -88,8 +88,8 @@ decrementing the gap to match. `pnpm protocol layout` is what enforces it.
 Yes, and it is ordinary ENS — no SDK, no API key, no contract address:
 
 ```ts
-getEnsAddress({ name: "base.l2beat.eth" })            // → the current holder
-getEnsText({ name: "base.l2beat.eth", key: "url" })   // → what they published
+getEnsAddress({ name: "base.l2beat.eth" }); // → the current holder
+getEnsText({ name: "base.l2beat.eth", key: "url" }); // → what they published
 ```
 
 ---

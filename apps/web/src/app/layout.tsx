@@ -81,7 +81,7 @@ const metadata: Metadata = {
     default: "Nameslots",
     template: "%s · Nameslots",
   },
-  description: "Earn tax on precious subnames.",
+  description: "Open slots and earn tax income from always-on, self-priced, never-squatted subnames.",
   // An independent project. It wears ENS's colours; the name and the symbol
   // are its own, and no ENS mark appears anywhere in it.
   applicationName: "Nameslots",
@@ -89,7 +89,7 @@ const metadata: Metadata = {
     type: "website",
     siteName: "Nameslots",
     title: "Nameslots",
-    description: "Earn tax on precious subnames.",
+    description: "Open slots and earn tax income from always-on, self-priced, never-squatted subnames.",
   },
   twitter: { card: "summary_large_image" },
 };
