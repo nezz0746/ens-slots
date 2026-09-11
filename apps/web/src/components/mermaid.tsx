@@ -3,6 +3,13 @@
 import { useEffect, useId, useState } from "react";
 
 /**
+ * The smallest a diagram may be scaled before it is allowed to overflow and
+ * scroll instead. At Mermaid's 16px base this keeps labels at ~11px, which is
+ * the bottom of what is comfortable rather than the bottom of what is possible.
+ */
+const MIN_SCALE = 0.7;
+
+/**
  * One Mermaid diagram, drawn in the browser.
  *
  * ── Why the import is dynamic ───────────────────────────────────────────────
@@ -22,7 +29,13 @@ import { useEffect, useId, useState } from "react";
  * that off so the throw reaches the catch below and the page can say what broke
  * and keep the rest of itself intact.
  */
-export function Mermaid({ chart, caption }: { chart: string; caption?: string }) {
+export function Mermaid({
+  chart,
+  caption,
+}: {
+  chart: string;
+  caption?: string;
+}) {
   // `useId` is stable across server and client, which matters: Mermaid uses the
   // id to key the `<style>` it emits, and a value from `Math.random()` would
   // differ between the two renders and trip hydration.
@@ -30,6 +43,7 @@ export function Mermaid({ chart, caption }: { chart: string; caption?: string })
   const id = `m${reactId.replace(/[^a-zA-Z0-9]/g, "")}`;
 
   const [svg, setSvg] = useState<string | null>(null);
+  const [naturalWidth, setNaturalWidth] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,7 +61,7 @@ export function Mermaid({ chart, caption }: { chart: string; caption?: string })
           // still comes from each diagram's own `classDef`.
           themeVariables: {
             fontFamily: "var(--font-urbanist), system-ui, sans-serif",
-            fontSize: "14px",
+            fontSize: "16px",
             primaryColor: "#cee1e8",
             primaryTextColor: "#011a25",
             primaryBorderColor: "#0080bc",
@@ -59,7 +73,13 @@ export function Mermaid({ chart, caption }: { chart: string; caption?: string })
           },
         });
         const { svg: out } = await mermaid.render(id, chart);
-        if (live) setSvg(out);
+        if (!live) return;
+        // The drawing's own width, before any scaling. Read from the viewBox
+        // because that is the only place Mermaid states it honestly — the
+        // `width`/`style` it also writes are already a fitted size.
+        const box = /viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/.exec(out);
+        setNaturalWidth(box ? Number(box[1]) : 0);
+        setSvg(out);
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : String(e));
       }
@@ -83,23 +103,37 @@ export function Mermaid({ chart, caption }: { chart: string; caption?: string })
 
   return (
     <figure className="my-6">
-      <div
-        // Mermaid writes an intrinsic width onto the SVG, and left alone it is
-        // whatever the layout engine wanted — wider than this column, and wide
-        // enough that the PAGE scrolled sideways rather than the figure. Capping
-        // it at the container scales the drawing down to fit; `overflow-x-auto`
-        // stays as the backstop for one that still will not.
-        className="overflow-x-auto rounded-card border border-line bg-surface p-4 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
-      >
-        {svg ? (
-          // Mermaid's own output, rendered from source this repo controls.
-          // eslint-disable-next-line react/no-danger
-          <div dangerouslySetInnerHTML={{ __html: svg }} />
-        ) : (
-          <div className="flex h-40 items-center justify-center text-xs text-ink-faint">
-            drawing…
-          </div>
-        )}
+      <div className="overflow-x-auto rounded-card border border-line bg-surface p-4">
+        {/*
+         * A floor on legibility, not on size.
+         *
+         * Left to fit the page, a wide diagram shrinks until it fits — and the
+         * widest one here is 2762px of drawing, which fitted to the column at
+         * 0.46 and put its labels at an effective 6.5px. That is not a small
+         * diagram, it is an unreadable one, and shrinking further to avoid a
+         * scrollbar trades the only thing the picture was for.
+         *
+         * `MIN_SCALE` of the natural width as a floor inverts it: anything that
+         * fits above that scale simply fits, and anything that does not stops
+         * shrinking and scrolls sideways inside this box instead. The page never
+         * scrolls horizontally either way — the overflow is the figure's.
+         */}
+        <div
+          style={{
+            minWidth: naturalWidth ? naturalWidth * MIN_SCALE : undefined,
+          }}
+          className="[&_svg]:mx-auto [&_svg]:!h-auto [&_svg]:!w-full"
+        >
+          {svg ? (
+            // Mermaid's own output, rendered from source this repo controls.
+            // eslint-disable-next-line react/no-danger
+            <div dangerouslySetInnerHTML={{ __html: svg }} />
+          ) : (
+            <div className="flex h-40 items-center justify-center text-xs text-ink-faint">
+              drawing…
+            </div>
+          )}
+        </div>
       </div>
       {caption && (
         <figcaption className="mt-2 text-center text-xs text-ink-faint">

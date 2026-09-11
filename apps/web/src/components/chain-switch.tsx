@@ -43,8 +43,24 @@ import { useMounted } from "@/hooks/use-mounted";
  * the server renders the right chain on the first paint. See {config}.
  */
 export function ChainSwitch() {
-  const chainId = useChainId();
+  const live = useChainId();
   const config = useConfig();
+  const mounted = useMounted();
+  /**
+   * The connected chain, but not before the client has had a render.
+   *
+   * wagmi reports a restored connection on its very FIRST client render, so
+   * reading `live` straight into the label put "Sepolia" in the server's HTML
+   * and "Anvil" in the same slot on the client — a text mismatch, which fails
+   * hydration for the whole tree rather than just this word.
+   *
+   * The pre-mount value is `config.chains[0].id` rather than a chain named
+   * here, because that is precisely what `useChainId` returns with no
+   * connection — which is the situation the server is always in. Anything else
+   * would be a second guess at the server's answer, and would mismatch the day
+   * the config's order changed.
+   */
+  const chainId = mounted ? live : config.chains[0].id;
   const { isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { switchChainAsync, isPending } = useSwitchChain();

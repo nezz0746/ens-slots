@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useAccount, useBalance, useConnect, useDisconnect } from "wagmi";
 
 import { useIsLocal } from "@/hooks/use-addresses";
+import { useMounted } from "@/hooks/use-mounted";
 import { formatAmount, shortAddress } from "@/lib/format";
 import { IS_DEV } from "@/lib/chains";
 import { DEV_ACCOUNTS } from "@/lib/wagmi";
@@ -35,8 +36,12 @@ import { cn } from "@/lib/utils";
 export function DevTools() {
   const [open, setOpen] = useState(false);
   const isLocal = useIsLocal();
+  const mounted = useMounted();
 
-  if (!IS_DEV || !isLocal) return null;
+  // `mounted` too: `isLocal` reads the CONNECTED chain, which the server cannot
+  // know and the client knows on its first render — so the server sent no dev
+  // bar and the client hydrated one into the same slot. See {useMounted}.
+  if (!IS_DEV || !mounted || !isLocal) return null;
 
   return (
     <div className="fixed right-4 bottom-4 z-40 flex flex-col items-end gap-2">

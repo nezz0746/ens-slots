@@ -42,7 +42,7 @@ export default function ProtocolPage() {
   const blocks = parseMarkdown(readFileSync(DOC, "utf8"));
 
   return (
-    <article className="mx-auto max-w-3xl px-5 py-10 lg:px-0">
+    <article className="w-full px-5 py-10 lg:px-8">
       {blocks.map((block, i) => {
         switch (block.kind) {
           case "heading":

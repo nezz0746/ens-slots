@@ -11,7 +11,7 @@ Only the first group is ours. ENSv2 owns the names, 0xSlots owns the markets,
 and this sits between them holding neither.
 
 ```mermaid
-graph TB
+graph LR
     subgraph OURS["Nameslots"]
         F["SlotNamespaceFactory<br/><i>the index</i>"]
         NS["SlotNamespace<br/><i>one per parent name</i>"]
@@ -170,6 +170,7 @@ The owner can re-price the market they run, but never *now*.
 
 ```mermaid
 stateDiagram-v2
+    direction LR
     [*] --> Live: label slotted with its own terms
     Live --> Queued: owner calls proposeLabelTerms
     Queued --> Queued: proposing again replaces it
