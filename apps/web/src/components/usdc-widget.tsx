@@ -7,6 +7,7 @@ import { useAccount, useReadContract } from "wagmi";
 import { useTx } from "@/hooks/use-tx";
 import { mockUsdcAbi } from "@/lib/abis";
 import { useAddresses, useIsDeployed } from "@/hooks/use-addresses";
+import { useMounted } from "@/hooks/use-mounted";
 import { cn } from "@/lib/utils";
 
 const HUNDRED = 100_000_000n; // 100 USDC, six decimals
@@ -38,6 +39,7 @@ const HUNDRED = 100_000_000n; // 100 USDC, six decimals
  */
 export function UsdcWidget() {
   const { address, isConnected } = useAccount();
+  const mounted = useMounted();
   const addresses = useAddresses();
   const deployed = useIsDeployed();
   const { send, pending, error } = useTx();
@@ -50,7 +52,10 @@ export function UsdcWidget() {
     query: { enabled: !!address, refetchInterval: 5_000 },
   });
 
-  if (!isConnected) return null;
+  // `mounted` and not just `isConnected`: the server has no wallet and renders
+  // nothing here, so a client that already knows it is connected on its very
+  // first render would hydrate a subtree the server never sent. See {useMounted}.
+  if (!mounted || !isConnected) return null;
 
   const shown = balance
     ? Number(formatUnits(balance, 6)).toLocaleString(undefined, {

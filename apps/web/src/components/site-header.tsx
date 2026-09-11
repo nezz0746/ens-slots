@@ -28,6 +28,11 @@ export function SiteHeader() {
               Open one
             </Button>
           </Link>
+          <Link href="/protocol">
+            <Button variant="ghost" size="sm">
+              How it works
+            </Button>
+          </Link>
         </nav>
 
         <div className="ml-auto flex items-center gap-2">

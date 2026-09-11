@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import type { Connector } from "wagmi";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 
+import { useMounted } from "@/hooks/use-mounted";
+
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Dropdown, MenuItem } from "@/components/ui/dropdown";
@@ -93,6 +95,7 @@ function useAvailableConnectors() {
 
 export function ConnectButton() {
   const { address, isConnected, connector: active } = useAccount();
+  const mounted = useMounted();
   const { connect, isPending, error, reset, variables } = useConnect();
   const { disconnect } = useDisconnect();
   const available = useAvailableConnectors();
@@ -105,7 +108,9 @@ export function ConnectButton() {
     if (isConnected) setPicking(false);
   }, [isConnected]);
 
-  if (isConnected)
+  // See {useMounted}: connected and not-connected are different subtrees, and
+  // the server can only ever render the second one.
+  if (mounted && isConnected)
     return (
       <Dropdown
         trigger={({ toggle }) => (

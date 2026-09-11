@@ -13,10 +13,9 @@ and this sits between them holding neither.
 ```mermaid
 graph TB
     subgraph OURS["Nameslots"]
-        F["SlotNamespaceFactory<br/><i>UUPS · the index</i>"]
-        B(["UpgradeableBeacon"])
-        NS["SlotNamespace<br/><i>BeaconProxy · one per parent name</i>"]
-        RES["SlotNamespaceResolver<br/><i>UUPS · one for all of them</i>"]
+        F["SlotNamespaceFactory<br/><i>the index</i>"]
+        NS["SlotNamespace<br/><i>one per parent name</i>"]
+        RES["SlotNamespaceResolver<br/><i>one for all of them</i>"]
     end
 
     subgraph ENS["ENSv2 — the names"]
@@ -31,12 +30,10 @@ graph TB
         HOOK["MinimumTenureHook"]
     end
 
-    F -->|owns| B
-    B -.->|implementation| NS
-    F -->|"index: namespaceOf[parentNode]"| NS
+    F -->|"opens, and indexes by parent node"| NS
     F -->|deploys through| VF
     VF -->|creates| USER
-    RES -->|holds| F
+    RES -->|asks| F
 
     NS -->|registers labels into| USER
     USER -->|"resolver ="| RES
@@ -50,14 +47,14 @@ graph TB
     classDef ours fill:#0080bc,stroke:#011a25,color:#fff
     classDef ens fill:#cee1e8,stroke:#011a25,color:#011a25
     classDef slot fill:#f2c4da,stroke:#011a25,color:#011a25
-    class F,B,NS,RES ours
+    class F,NS,RES ours
     class ETH,VF,USER ens
     class SF,SLOT,HOOK slot
 ```
 
 The factory is the index because nothing else can be: an ENSv2 registry does not
-know its own name, and resolution only ever walks *down* from the root. One
-beacon means one transaction re-points every namespace at new code.
+know its own name, and resolution only ever walks *down* from the root. So the
+resolver cannot ask a name which namespace it belongs to — it asks the factory.
 
 ---
 
@@ -81,7 +78,7 @@ sequenceDiagram
     F->>F: revert if already opened
     F->>ETH: ownerOf(getTokenId(labelhash))
     ETH-->>F: 0x26bB… — nobody chooses this
-    F->>NS: new BeaconProxy(beacon)
+    F->>NS: deploy the namespace
     F->>VF: deployProxy(UserRegistry)
     Note over VF: namespace → REGISTRAR + UNREGISTER<br/>owner → ALL_ROLES
     F->>NS: initialize(registry, terms, labels, …)
@@ -197,4 +194,4 @@ can see says what is queued. A change nobody could see coming would be the trap.
 | Holder of the parent `.eth` name | Slot and unslot labels, propose terms, edit the parent profile, receive all tax | `ethRegistry.ownerOf` — derived, never stored, non-transferable on its own |
 | Occupant of a label | Set that name's price, write its records, be bought out | `slot.occupant()`, records scoped to `tenureId` |
 | Anyone | Buy any occupied label at its stated price, `collect()`, `sweep()`, `withdraw()` to the owner | ungated by design |
-| `admin` | Upgrade the beacon, the factory and the resolver | one key today; `transferAdmin` moves it to a multisig |
+| `admin` | Replace the code behind every namespace at once | one key today; `transferAdmin` moves it to a multisig |

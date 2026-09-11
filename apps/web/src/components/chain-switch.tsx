@@ -14,6 +14,7 @@ import { Dropdown, MenuItem } from "@/components/ui/dropdown";
 import { DEPLOYED_CHAIN_IDS, isDeployedOn } from "@/lib/addresses";
 import { chainLabel, IS_DEV, isLocal } from "@/lib/chains";
 import { cn } from "@/lib/utils";
+import { useMounted } from "@/hooks/use-mounted";
 
 /**
  * Which chain the app is talking to.
@@ -158,11 +159,12 @@ export function ChainSwitch() {
  * reads as "nobody has opened a namespace" rather than "you are on Optimism".
  */
 export function WrongChainNotice() {
+  const mounted = useMounted();
   const chainId = useChainId();
   const { isConnected } = useAccount();
   const { switchChain } = useSwitchChain();
 
-  if (!isConnected || isDeployedOn(chainId)) return null;
+  if (!mounted || !isConnected || isDeployedOn(chainId)) return null;
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-[--radius-card] border border-warn/30 bg-warn-soft px-4 py-2.5">
