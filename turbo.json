@@ -16,7 +16,10 @@
       "dependsOn": [
         "build"
       ],
-      "cache": false
+      "cache": false,
+      "env": [
+        "SEPOLIA_RPC_URL"
+      ]
     },
     "typecheck": {
       "cache": false

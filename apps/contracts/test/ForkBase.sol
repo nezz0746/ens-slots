@@ -60,8 +60,13 @@ abstract contract ForkBase is Test {
     uint64 constant MIN_DEPOSIT_SECONDS = 7 days;
 
     function setUp() public virtual {
-        // Skips cleanly rather than failing when no endpoint is configured, so
-        // `forge test` is still useful without one.
+        // Skips rather than fails when no endpoint is configured, so a clone
+        // without one can still run `forge build` and read the suite.
+        //
+        // The WARNING lives in `scripts/forge-test.sh`, not here: forge hides
+        // logs for a skipped test at default verbosity, so a `console2.log` on
+        // this branch is a message nobody ever sees — which is the same failure
+        // as the silent skip it would be trying to announce.
         try vm.envString("SEPOLIA_RPC_URL") returns (string memory url) {
             vm.createSelectFork(url);
         } catch {
