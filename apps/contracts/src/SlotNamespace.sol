@@ -207,9 +207,18 @@ contract SlotNamespace is
         if (amount == 0) revert NothingToWithdraw();
 
         address to = owner();
+        // The parent name can have NO owner — expired, or never registered —
+        // and `ownerOf` answers zero for both. A `call` to the zero address
+        // SUCCEEDS, so without this the whole treasury went to nobody, `ok`
+        // came back true, and `Withdrawn(0x0, amount)` was emitted over the
+        // top of it. {SlotNamespaceFactory-open} already refuses to open a
+        // namespace for an unowned name; this is the same check at the other
+        // end of the name's life.
+        if (to == address(0)) revert NoOwner();
+
         if (native) {
             (bool ok,) = to.call{value: amount}("");
-            if (!ok) revert NothingToWithdraw();
+            if (!ok) revert PayoutRejected(to, amount);
         } else {
             token.safeTransfer(to, amount);
         }

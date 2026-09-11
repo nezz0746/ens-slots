@@ -199,6 +199,41 @@ contract TermsTest is ForkBase {
         namespace.withdraw();
         assertGt(owner.balance, before, "still went to the owner");
     }
+
+    /**
+     * @notice A treasury with no owner to pay is not paid to nobody.
+     *
+     * @dev The bug this pins: `owner()` answers `address(0)` for an expired or
+     *      unregistered parent name, a `call` with value to the zero address
+     *      SUCCEEDS, and `withdraw` is ungated. So for the whole of a lapsed
+     *      name's grace period anybody could send the namespace's entire native
+     *      balance to nobody, collect a `Withdrawn` event saying it had been
+     *      paid, and leave the owner to renew into an empty contract.
+     *
+     *      The name is expired here rather than mocked, because `ownerOf`
+     *      returning zero for an expired name is the ENSv2 behaviour the whole
+     *      derived-ownership design rests on — a mock would pass even if that
+     *      stopped being true.
+     */
+    function test_WithdrawRefusesWhenTheParentNameHasNoOwner() public {
+        (address slot,) = _slot("alpha", address(0), false);
+        _take(slot, alice, 1 ether);
+        skip(30 days);
+        ISlot(slot).collect();
+
+        uint256 held = address(namespace).balance;
+        assertGt(held, 0, "there is something to lose");
+
+        // Past the 365-day registration ForkBase buys, and past any grace.
+        skip(400 days);
+        assertEq(namespace.owner(), address(0), "the name has lapsed");
+
+        vm.prank(bob);
+        vm.expectRevert(SlotNamespaceBase.NoOwner.selector);
+        namespace.withdraw();
+
+        assertEq(address(namespace).balance, held, "and the money is still here");
+    }
 }
 
 /// @dev Minimal ERC1155 transfer surface — ENSv2 names are ERC1155 tokens.

@@ -82,10 +82,17 @@ abstract contract SlotNamespaceBase {
     error NotOccupant(address caller, address occupant);
     error NoResolver();
     error LengthMismatch();
-    error NotParentOwner(address caller, address owner);
     error OwnershipFollowsTheName();
     error LabelhashMismatch();
     error NothingToWithdraw();
+    /// @dev The parent name has no owner — unregistered, or expired. Distinct
+    ///      from {NothingToWithdraw}: there IS something to send and nobody to
+    ///      send it to, which is the case that used to burn it.
+    error NoOwner();
+    /// @dev The owner rejected the payment. Distinct from {NothingToWithdraw},
+    ///      which used to cover this too and told an owner whose contract has
+    ///      no payable fallback that their treasury was empty.
+    error PayoutRejected(address to, uint256 amount);
     error InvalidTax(string label);
 
     event LabelSlotted(
