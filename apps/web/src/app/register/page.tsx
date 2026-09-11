@@ -223,6 +223,43 @@ export default function RegisterPage() {
         router.push(`/n/${namespace}`);
         return;
       }
+
+      /**
+       * And the name's own resolver, which is a separate entry.
+       *
+       * `setSubregistry` says where the names BELOW this one live. It says
+       * nothing about how this name itself resolves, and without a resolver on
+       * the `.eth` entry the namespace profile written by `setParentText` is
+       * stored somewhere no ENS client can reach — the Universal Resolver walks
+       * down looking for a resolver, finds none, and answers nothing. "Edit
+       * profile" appeared to work because the app reads `parentTextOf` from the
+       * contract directly; everybody else on ENS saw an empty name.
+       *
+       * A name bought through the flow above never had this gap: the registrar
+       * takes a resolver argument and `acquire-name` passes ours. Only a name
+       * you already held arrives here without one.
+       *
+       * Read first, so the common case of it already being right costs nothing.
+       */
+      const current = await client.readContract({
+        address: addresses.ensEthRegistry,
+        abi: ensRegistryAbi,
+        functionName: "getResolver",
+        args: [clean],
+      });
+      if (
+        (current as string).toLowerCase() !==
+        addresses.namespaceResolver.toLowerCase()
+      ) {
+        // Also not fatal: subnames already resolve at this point. Only the
+        // parent's own profile is waiting on it.
+        await send("resolver", {
+          address: addresses.ensEthRegistry,
+          abi: ensRegistryAbi,
+          functionName: "setResolver",
+          args: [tokenId, addresses.namespaceResolver],
+        });
+      }
     }
 
     router.push(`/n/${namespace}`);
@@ -290,7 +327,7 @@ export default function RegisterPage() {
           <p className="mt-1 text-[11px] leading-snug text-ink-faint">
             {needsBuying
               ? "One transaction: it deploys your subname registry, gives the namespace the two roles it needs, and sets the resolver on every subname it opens. The name you just bought is already registered to that registry."
-              : "Two transactions. The first deploys your subname registry and gives the namespace its roles. The second records that registry on your .eth name, so subnames resolve through it — and only its owner can do that."}
+              : "Up to three transactions. The first deploys your subname registry and gives the namespace its roles. The second records that registry on your .eth name, so subnames resolve through it. The third sets the resolver on the name itself, so the name\u2019s own profile resolves too — skipped if it is already set. Only its owner can send the last two."}
           </p>
         </div>
         <Button
@@ -317,6 +354,11 @@ export default function RegisterPage() {
             <>
               <Loader2 className="animate-spin" />
               Recording the registry on your name…
+            </>
+          ) : pending === "resolver" ? (
+            <>
+              <Loader2 className="animate-spin" />
+              Setting the resolver on your name…
             </>
           ) : (
             "Open"

@@ -632,6 +632,26 @@ export const ensRegistryAbi = [
     ],
     outputs: [],
   },
+  // Takes the LABEL, not a token id — unlike everything else on this registry,
+  // which is `anyId`-polymorphic. Verified against the live contract: passing a
+  // labelhash as a uint reverts.
+  {
+    type: "function",
+    name: "getResolver",
+    stateMutability: "view",
+    inputs: [{ name: "label", type: "string" }],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "setResolver",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "anyId", type: "uint256" },
+      { name: "resolver", type: "address" },
+    ],
+    outputs: [],
+  },
 ] as const;
 
 export const verifiableFactoryAbi = [
