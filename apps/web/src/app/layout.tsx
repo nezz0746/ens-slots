@@ -70,7 +70,9 @@ async function siteUrl(): Promise<URL> {
 
   // Traefik terminates TLS and forwards plain HTTP, so the scheme has to come
   // from the header rather than from what this process can see.
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const proto =
+    h.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") ? "http" : "https");
   return new URL(`${proto}://${host}`);
 }
 
@@ -79,8 +81,7 @@ const metadata: Metadata = {
     default: "Nameslots",
     template: "%s · Nameslots",
   },
-  description:
-    "Taxable subnames. The holder sets what a name is worth, pays tax on that number continuously, and gives it up to anyone willing to pay it.",
+  description: "Earn tax on precious subnames.",
   // An independent project. It wears ENS's colours; the name and the symbol
   // are its own, and no ENS mark appears anywhere in it.
   applicationName: "Nameslots",
@@ -88,8 +89,7 @@ const metadata: Metadata = {
     type: "website",
     siteName: "Nameslots",
     title: "Nameslots",
-    description:
-      "Taxable subnames. The holder sets what a name is worth, pays tax on that number continuously, and gives it up to anyone willing to pay it.",
+    description: "Earn tax on precious subnames.",
   },
   twitter: { card: "summary_large_image" },
 };
