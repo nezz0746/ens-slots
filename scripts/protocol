@@ -73,13 +73,35 @@ export DRY_RUN="${DRY:+true}"
 
 # A private key is needed only to send. `status` and `layout` read, and a `--dry`
 # upgrade simulates — none of them should demand one.
+#
+# ── Why the check is not inside `key_args` any more ─────────────────────────
+#
+# It was `${PK:?...}`, expanded inside `$(key_args)`. A `:?` failure kills the
+# SUBSHELL the substitution runs in — `set -e` in the parent never sees it. So
+# a keyless `deploy --sepolia` printed "PRIVATE_KEY is not set" and then ran
+# the entire forge script anyway, unsigned, under foundry's default sender,
+# reaching every `record()` call before it failed at the signing step. On a
+# fresh chain that leaves a ledger naming five contracts that were never sent.
+#
+# Reproduced before changing it, and the guard now runs in the parent shell
+# where `exit` means exit.
+LOCAL_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+
+require_key() {
+  [ "$NETWORK" = "local" ] && return 0
+  # `PRIVATE_KEY` is the name `.env.example` documents; `PK` stays as an alias
+  # so an exported shell variable keeps working.
+  if [ -z "${PRIVATE_KEY:-${PK:-}}" ]; then
+    echo "PRIVATE_KEY is not set — the key that holds admin on Sepolia" >&2
+    exit 1
+  fi
+}
+
 key_args() {
   if [ "$NETWORK" = "local" ]; then
-    echo "--private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+    echo "--private-key $LOCAL_KEY"
   else
-    # `PRIVATE_KEY` is the name `.env.example` documents; `PK` stays as an
-    # alias so an exported shell variable keeps working.
-    echo "--private-key ${PRIVATE_KEY:-${PK:?PRIVATE_KEY is not set — the key that holds admin on Sepolia}}"
+    echo "--private-key ${PRIVATE_KEY:-${PK:-}}"
   fi
 }
 
@@ -93,6 +115,7 @@ sync_app() {
 }
 
 run_script() {                # $1 = contract name in script/protocol
+  require_key
   cd "$CONTRACTS"
   # `vm.writeFile` will not create a directory, and the ledger for a chain that
   # has never been deployed to does not have one.
@@ -125,10 +148,24 @@ case "$CMD" in
     "$ROOT/scripts/slots-addresses.mjs" check
     cd "$CONTRACTS"
     forge build --skip test >/dev/null
-    # Adopted rather than checked. There is nothing live to break yet, and a
-    # first deploy on a chain with no snapshot would otherwise be blocked by a
-    # check that has nothing to compare against.
-    ./script/layout.py accept
+    # ── Adopt only when there is nothing to adopt OVER ──────────────────
+    #
+    # This was an unconditional `accept`, which meant the storage baseline
+    # guarding every live namespace was rewritten by any deploy — including
+    # `pnpm dev:local`, which reaches here through `seed.sh`, with the "wrote
+    # storage/..." lines swallowed by a `>/dev/null`. The snapshots are not
+    # chain-scoped, so a LOCAL deploy silently rebaselined SEPOLIA. It also
+    # fired before the script ran, so `deploy` on an already-deployed chain
+    # destroyed the baseline on its way to failing with `AlreadyDeployed`.
+    #
+    # The original reasoning holds only for the case it named: a first deploy
+    # with no snapshot to compare against. That is what this tests for now.
+    if ls storage/*.json >/dev/null 2>&1; then
+      ./script/layout.py check
+    else
+      echo "  no layout snapshot yet — adopting the current one"
+      ./script/layout.py accept
+    fi
     run_script Deploy
     sync_app
     ;;
