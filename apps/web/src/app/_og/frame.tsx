@@ -109,7 +109,8 @@ export function OgFrame({
   facts = [],
 }: {
   title: string;
-  subtitle: string;
+  /** Optional: a card whose title already says the whole thing omits it. */
+  subtitle?: string;
   facts?: Fact[];
 }) {
   return (
@@ -172,18 +173,20 @@ export function OgFrame({
         >
           {title}
         </div>
-        <div
-          style={{
-            display: "flex",
-            fontSize: facts.length > 0 ? 30 : 34,
-            fontWeight: 500,
-            color: INK_SOFT,
-            lineHeight: 1.4,
-            maxWidth: 900,
-          }}
-        >
-          {subtitle}
-        </div>
+        {subtitle && (
+          <div
+            style={{
+              display: "flex",
+              fontSize: facts.length > 0 ? 30 : 34,
+              fontWeight: 500,
+              color: INK_SOFT,
+              lineHeight: 1.4,
+              maxWidth: 900,
+            }}
+          >
+            {subtitle}
+          </div>
+        )}
       </div>
 
       {facts.length > 0 && (
