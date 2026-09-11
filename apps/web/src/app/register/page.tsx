@@ -289,16 +289,16 @@ export default function RegisterPage() {
           </p>
           <p className="mt-1 text-[11px] leading-snug text-ink-faint">
             {needsBuying
-              ? "One transaction: it deploys your subname registry, gives the namespace the two roles it needs, and points it at the resolver. The name you just bought already points there."
-              : "Two transactions. The first deploys your subname registry and gives the namespace its roles; the second points your name at it, which only you can do."}
+              ? "One transaction: it deploys your subname registry, gives the namespace the two roles it needs, and sets the resolver on every subname it opens. The name you just bought is already registered to that registry."
+              : "Two transactions. The first deploys your subname registry and gives the namespace its roles. The second records that registry on your .eth name, so subnames resolve through it — and only its owner can do that."}
           </p>
         </div>
         <Button
           className="w-full"
           // Gated on the name existing. Opening a namespace under a name
-          // nobody has registered deploys a registry the `.eth` entry cannot be
-          // pointed at, so it succeeds and resolves to nothing — the most
-          // expensive way this page could mislead somebody.
+          // nobody has registered deploys a registry that no `.eth` entry can
+          // be made to point to, so it succeeds and resolves to nothing — the
+          // most expensive way this page could mislead somebody.
           // `somebodyElses` matters as much as the rest: `open` derives the
           // owner from the name, so this reverts for anybody who is not it —
           // and a live button whose only outcome is a revert is worse than
@@ -316,7 +316,7 @@ export default function RegisterPage() {
           ) : pending === "point" ? (
             <>
               <Loader2 className="animate-spin" />
-              Pointing your name at it…
+              Recording the registry on your name…
             </>
           ) : (
             "Open"

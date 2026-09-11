@@ -85,7 +85,7 @@ sequenceDiagram
 
     loop each label
         NS->>SF: createSlot(manager = recipient = namespace)
-        NS->>NS: register label, point it at the resolver
+        NS->>NS: register the label, set its resolver
     end
 
     F-->>Owner: namespace, registry
