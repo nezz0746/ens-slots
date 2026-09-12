@@ -31,12 +31,11 @@ const PARTS: Part[] = [
     dot: true,
     tone: "hot",
     label: "The slot",
-    who: "Whoever is paying for it",
-    lines: [
-      "They named the price themselves.",
-      "They pay tax on that number, continuously.",
-      "Anyone can take it from them at it.",
-    ],
+    // "Holders", not "owners": the card beside this one calls YOU the owner,
+    // and the two would collide on the same picture. It is also the truer
+    // word — the subname stays registered to the namespace contract.
+    who: "Subname holders",
+    lines: ["Self-priced", "Always contestable", "Never squattable"],
   },
   {
     text: "l2beat",
@@ -142,9 +141,13 @@ export function SlotNameAnatomy() {
                 {part.lines.map((line) => (
                   <li
                     key={line}
-                    className="text-[12px] leading-relaxed text-ink-soft"
+                    className="flex gap-2 text-[12px] leading-relaxed text-ink-soft"
                   >
-                    {line}
+                    <span
+                      aria-hidden
+                      className={`mt-[6px] size-1 shrink-0 rounded-full ${TONE[part.tone].rule}`}
+                    />
+                    <span>{line}</span>
                   </li>
                 ))}
               </ul>
