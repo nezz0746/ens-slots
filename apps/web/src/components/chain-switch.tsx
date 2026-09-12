@@ -168,32 +168,91 @@ export function ChainSwitch() {
 }
 
 /**
- * A banner for a chain the app cannot serve.
+ * The wallet is somewhere else, said before a transaction has to say it.
  *
- * A wallet can be on any network it likes, including one this protocol has
- * never been deployed to. Without saying so the app draws an empty list, which
- * reads as "nobody has opened a namespace" rather than "you are on Optimism".
+ * ── The comparison this makes, and the one it used to ───────────────────────
+ *
+ * `useChainId()` is the APP's chain, not the wallet's, and wagmi only ever
+ * moves it to a chain that is CONFIGURED:
+ *
+ *     if (!isChainConfigured) return;        // @wagmi/core createConfig.js
+ *
+ * So it cannot report Optimism, or any other network a visitor happens to be
+ * on. This banner used to test `isDeployedOn(useChainId())`, which is true of
+ * every chain the config holds — so the one case it was written for was the one
+ * case it could not see, and it never rendered. The mismatch surfaced instead
+ * as a failed write, several clicks later, in nine different places.
+ *
+ * The connection carries the wallet's own answer, unconfigured chains included.
+ * That is what gets compared here.
+ *
+ * ── Which side moves ────────────────────────────────────────────────────────
+ *
+ * The wallet. The header selector is a deliberate choice about which
+ * deployment to look at, and every read on the page is already answering from
+ * it; moving the app instead would undo that choice on the reader's behalf.
+ * The write error names the other direction — "or pick the matching one in the
+ * header" — so between the two both ways out are offered.
  */
 export function WrongChainNotice() {
   const mounted = useMounted();
-  const chainId = useChainId();
-  const { isConnected } = useAccount();
-  const { switchChain } = useSwitchChain();
+  const appChainId = useChainId();
+  const { isConnected, chainId: walletChainId } = useAccount();
+  const { switchChainAsync, isPending } = useSwitchChain();
+  const [error, setError] = useState<string | null>(null);
 
-  if (!mounted || !isConnected || isDeployedOn(chainId)) return null;
+  async function move() {
+    setError(null);
+    try {
+      await switchChainAsync({ chainId: appChainId });
+    } catch (cause) {
+      setError(reason(cause, appChainId));
+    }
+  }
+
+  if (!mounted || !isConnected || walletChainId === undefined) return null;
+
+  /**
+   * Silent on the fork, deliberately.
+   *
+   * Local development signs with the demo accounts — anvil's own keys, bound by
+   * {useChainSigner} — and those are on 31337 by construction, so they can
+   * never be the mismatch this warns about. The only way to see it here is to
+   * have a real wallet connected as well, which on a chain reachable only at
+   * `127.0.0.1:8545` is usually incidental rather than intended.
+   *
+   * The honest cost, since it is a real one: this hides the WARNING, not the
+   * problem. A write attempted while a real wallet is the current signer still
+   * fails, and now does so with no notice beforehand — as "Your wallet is on a
+   * different network" under whichever button was pressed. See `readReason` in
+   * {useTx}. Off the fork, where a real wallet is the expected signer, the
+   * banner still runs.
+   */
+  if (isLocal(appChainId)) return null;
+
+  if (walletChainId === appChainId) return null;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-[--radius-card] border border-warn/30 bg-warn-soft px-4 py-2.5">
-      <p className="text-[11px] text-warn">
-        Nothing is deployed on the network your wallet is using.
-      </p>
-      <button
-        type="button"
-        onClick={() => switchChain({ chainId: DEPLOYED_CHAIN_IDS[0] })}
-        className="shrink-0 text-[11px] font-medium text-warn underline underline-offset-2"
-      >
-        Switch to {chainLabel(DEPLOYED_CHAIN_IDS[0])}
-      </button>
+    <div className="space-y-1.5 rounded-[--radius-card] border border-warn/30 bg-warn-soft px-4 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] text-warn">
+          {/* Naming the network only when we can. `chainLabel` answers
+              "Unknown" for anything outside the config, and "Your wallet is on
+              Unknown" tells the reader less than not naming it at all. */}
+          {isDeployedOn(walletChainId)
+            ? `Your wallet is on ${chainLabel(walletChainId)}; this page is showing ${chainLabel(appChainId)}.`
+            : `Nothing is deployed on the network your wallet is using. This page is showing ${chainLabel(appChainId)}.`}
+        </p>
+        <button
+          type="button"
+          onClick={() => void move()}
+          disabled={isPending}
+          className="shrink-0 text-[11px] font-medium text-warn underline underline-offset-2 disabled:opacity-50"
+        >
+          {isPending ? "Switching…" : `Switch to ${chainLabel(appChainId)}`}
+        </button>
+      </div>
+      {error && <p className="text-[11px] leading-snug text-hot">{error}</p>}
     </div>
   );
 }
