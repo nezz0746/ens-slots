@@ -120,15 +120,12 @@ export function ResolutionChain() {
         <div className="mt-4 grid gap-2 border-t border-line pt-3 text-[11px] sm:grid-cols-2">
           <p className="text-ink-soft">
             <ArrowRight className="mr-1 inline size-3 text-ink-faint" />
-            <span className="font-semibold text-ink">
-              addr() → 0xA1c4…9f2e
-            </span>{" "}
-            — whoever is holding it, read at the moment you ask.
+            <span className="font-semibold text-ink">addr() → 0xA1c4…9f2e</span>
           </p>
           <p className="text-ink-soft">
             <ArrowRight className="mr-1 inline size-3 rotate-180 text-ink-faint" />
             <span className="font-semibold text-hot">
-              $120/mo — 5% of the $2,400 they valued it at
+              $120/mo — 5% of the $2,400 valuation
             </span>{" "}
             flows back the other way, and{" "}
             <span className="font-mono">withdraw()</span> pays whoever owns{" "}
@@ -159,10 +156,7 @@ export function ResolutionChain() {
               <dd className="font-mono text-ink">0xA1c4…9f2e</dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-ink-soft">
-                Valuation{" "}
-                <span className="text-ink-faint">they set it themselves</span>
-              </dt>
+              <dt className="text-ink-soft">Valuation</dt>
               <dd className="font-semibold text-ink tabular-nums">$2,400</dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
@@ -209,13 +203,6 @@ export function ResolutionChain() {
           </dl>
         </div>
       </div>
-
-      <figcaption className="text-xs leading-relaxed text-ink-faint">
-        The name itself never moves between people — it stays registered to{" "}
-        <span className="font-semibold text-ink">SlotNamespace</span> the whole
-        time. What changes hands is what it resolves to, so a turnover writes
-        nothing to ENS and there is nothing about it that can fail.
-      </figcaption>
     </figure>
   );
 }

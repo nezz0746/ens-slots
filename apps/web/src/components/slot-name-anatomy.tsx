@@ -152,11 +152,6 @@ export function SlotNameAnatomy() {
           ))}
         </div>
       </div>
-
-      <figcaption className="mt-3 text-center text-xs text-ink-faint">
-        The name never moves. What follows the holder is what it{" "}
-        <em className="italic">resolves</em> to.
-      </figcaption>
     </figure>
   );
 }
