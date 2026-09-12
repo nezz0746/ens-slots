@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { MoneyFlow } from "@/components/money-flow";
+import { ResolutionChain } from "@/components/resolution-chain";
 import { SlotNameAnatomy } from "@/components/slot-name-anatomy";
 
 /**
@@ -47,15 +47,13 @@ export default function ProtocolPage() {
       <SlotNameAnatomy />
 
       <h2 className="mt-12 mb-1 text-xl font-semibold tracking-tight text-ink">
-        Where the money goes
+        What answers, and what gets paid
       </h2>
       <p className="max-w-2xl text-sm leading-relaxed text-ink-soft">
-        Every holder pays tax on the price they set themselves. It accrues to
-        the namespace and leaves for whoever owns the parent name at that
-        moment — read from ENS, never stored, so selling the name sells the
-        income with it.
+        Four contracts, in the order a name touches them. Read left to right for
+        the answer; the money travels the same chain the other way.
       </p>
-      <MoneyFlow />
+      <ResolutionChain />
 
       <p className="mt-10 max-w-2xl text-sm leading-relaxed text-ink-soft">
         The contracts, the call ordering and the terms lifecycle live in{" "}
