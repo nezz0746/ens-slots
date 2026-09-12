@@ -6,9 +6,9 @@ import { formatUnits } from "viem";
 import { useAccount } from "wagmi";
 
 import { DECIMALS, isDollarPegged, SYMBOL } from "@/lib/currency";
-import { shortAddress } from "@/lib/format";
 
 import { Button } from "@/components/ui/button";
+import { Identity } from "@/components/identity";
 import { useCollectAll } from "@/hooks/use-collect-all";
 import { useNamespaceBalance } from "@/hooks/use-namespace-balance";
 import type { Namespace } from "@/hooks/use-namespaces";
@@ -137,8 +137,17 @@ export function NamespaceSummary({
             </span>
           ) : null}{" "}
           to{" "}
+          {/*
+            * "you" survives the addition of names, because it answers a
+            * different question. Everyone else is named where mainnet knows
+            * them and truncated where it does not — see {Identity}.
+            */}
           <span className="font-medium text-ink">
-            {isOwner ? "you" : shortAddress(namespace.owner)}
+            {isOwner ? (
+              "you"
+            ) : (
+              <Identity address={namespace.owner} className="align-text-bottom" />
+            )}
           </span>
         </p>
         <Stat

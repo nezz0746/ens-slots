@@ -10,7 +10,7 @@ import { useMounted } from "@/hooks/use-mounted";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Dropdown, MenuItem } from "@/components/ui/dropdown";
-import { shortAddress } from "@/lib/format";
+import { Identity } from "@/components/identity";
 import { cn } from "@/lib/utils";
 
 /**
@@ -120,8 +120,9 @@ export function ConnectButton() {
             onClick={toggle}
             title={active?.name ? `Connected with ${active.name}` : undefined}
           >
-            <Wallet />
-            {shortAddress(address)}
+            {/* The avatar stands in for the wallet icon when there is one:
+                two marks side by side said the same thing twice. */}
+            <Identity address={address} icon={<Wallet />} />
           </Button>
         )}
       >
