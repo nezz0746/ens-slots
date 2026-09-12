@@ -6,7 +6,6 @@ import {
   useAccount,
   useChainId,
   useConfig,
-  useConnect,
   useSwitchChain,
 } from "wagmi";
 
@@ -62,7 +61,6 @@ export function ChainSwitch() {
    */
   const chainId = mounted ? live : config.chains[0].id;
   const { isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
   const { switchChainAsync, isPending } = useSwitchChain();
   const [error, setError] = useState<string | null>(null);
 
@@ -74,25 +72,34 @@ export function ChainSwitch() {
    * simply not working. The async form is the one 0xSlots uses for the same
    * reason.
    *
-   * ── Disconnected is its own case ────────────────────────────────────────
+   * ── Two cases never reach a connector at all ────────────────────────────
    *
    * `switchChainAsync` asks the CONNECTOR to move, so with nothing connected
    * there is nothing to ask and it rejects — which left the selector dead
    * exactly when it was most needed: after leaving the fork, the demo account
    * is dropped, and getting back required a connection that only the fork
-   * could give you. So with no wallet attached the read chain is set directly,
-   * and the fork additionally binds a demo account, which is what makes it
-   * usable on arrival.
+   * could give you. The fork is the second case, for the reason set out below.
+   * Both just set the chain; {useChainSigner} attaches the right signer to it.
    */
   async function choose(id: (typeof DEPLOYED_CHAIN_IDS)[number]) {
     setError(null);
     try {
-      if (!isConnected) {
+      /**
+       * The fork is never asked of a wallet.
+       *
+       * `switchChainAsync` asks the CONNECTOR to move, and no wallet can move
+       * to `127.0.0.1:8545` unless somebody added that network by hand — so
+       * picking Anvil with MetaMask connected produced a prompt to add a
+       * localhost network, or a flat refusal, instead of a chain switch. In
+       * development the fork is served by the demo accounts, so setting the
+       * chain is the whole job: {useChainSigner} sees a local chain, replaces
+       * whatever was signing with an anvil key, and the page is usable.
+       *
+       * With nothing connected there is likewise no connector to ask, on
+       * either chain.
+       */
+      if (!isConnected || (IS_DEV && isLocal(id))) {
         config.setState((state) => ({ ...state, chainId: id }));
-        if (IS_DEV && isLocal(id)) {
-          const demo = connectors.find((c) => c.type === "mock");
-          if (demo) connect({ connector: demo, chainId: id });
-        }
         return;
       }
       await switchChainAsync({ chainId: id });
