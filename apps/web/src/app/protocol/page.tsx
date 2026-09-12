@@ -37,13 +37,9 @@ export default function ProtocolPage() {
         of those names is, and where the money goes.
       </p>
 
-      <h2 className="mt-10 mb-1 text-xl font-semibold tracking-tight text-ink">
+      <h2 className="mt-10 text-xl font-semibold tracking-tight text-ink">
         One name, two owners
       </h2>
-      <p className="max-w-2xl text-sm leading-relaxed text-ink-soft">
-        A slot name splits at the dot. You keep the half you registered; the
-        other half is on a market for as long as you leave it open.
-      </p>
       <SlotNameAnatomy />
 
       <h2 className="mt-12 mb-1 text-xl font-semibold tracking-tight text-ink">
