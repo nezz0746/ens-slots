@@ -89,10 +89,6 @@ export function SlotNameAnatomy() {
       {/* The name itself. `break-words` rather than `nowrap`: on a narrow
           screen a wrapped name is still readable, a clipped one is not. */}
       <div className="rounded-card border border-line bg-surface px-5 py-8 sm:px-8">
-        <p className="mb-6 text-center text-[11px] font-semibold tracking-[0.14em] text-ink-faint uppercase">
-          One name, two owners
-        </p>
-
         {/*
          * The separators are their own spans, OUTSIDE the coloured words and
          * outside the underlines. A dot inside `base`'s span would be tinted

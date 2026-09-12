@@ -1,171 +1,74 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import type { Metadata } from "next";
 
-import { Mermaid } from "@/components/mermaid";
+import { MoneyFlow } from "@/components/money-flow";
 import { SlotNameAnatomy } from "@/components/slot-name-anatomy";
-import { parseMarkdown, renderInline } from "@/lib/markdown";
 
 /**
- * How it works — the protocol document, drawn.
+ * How it works — two pictures and as few words as they need.
  *
- * ── One source, not two ─────────────────────────────────────────────────────
+ * ── Why this stopped rendering `docs/protocol.md` ───────────────────────────
  *
- * The page does not restate `docs/protocol.md`, it RENDERS it. A second copy of
- * these diagrams living in TSX would be a copy that goes stale, and the way it
- * would go stale is precisely the failure this project already had once: the
- * contracts changed, a description of them did not, and nothing connected the
- * two well enough to notice.
+ * It used to render that document: five Mermaid diagrams of contracts calling
+ * each other, sliced at a marker. The intent was one source of truth, and the
+ * intent was right for the repository — that is still where those five live,
+ * and GitHub draws them without help.
  *
- * ── Read at build time, deliberately ────────────────────────────────────────
+ * It was wrong for a visitor. A call-ordering graph answers "how is this
+ * built", and nobody arrives at a page called How it works asking that. They
+ * ask what a slot name is and who gets the money. Those are two hand-drawn
+ * pictures, and an auto-laid-out graph could not have been either of them.
  *
- * `force-static` makes this the only moment the file is opened. During a build
- * the whole repository is present and the working directory is this app, so the
- * path below resolves; in the container that later serves the page, neither is
- * guaranteed. Baking the markdown into the output means the page cannot fail in
- * production for a reason that has nothing to do with production.
- *
- * If the file moves, the build fails loudly here rather than shipping a page
- * that renders nothing.
+ * Dropping it also took `mermaid` — over a megabyte, for one route — and the
+ * small Markdown reader that existed only to feed it, out of the app.
  */
-export const dynamic = "force-static";
-
 export const metadata: Metadata = {
   title: "How it works — Nameslots",
-  description:
-    "What a slot name is, and the three contracts behind it.",
+  description: "What a slot name is, and where the money goes.",
 };
 
-const DOC = join(process.cwd(), "..", "..", "docs", "protocol.md");
-
-/**
- * The page renders the document up to this marker and stops.
- *
- * ── Why a marker and not two documents ──────────────────────────────────────
- *
- * `docs/protocol.md` has five diagrams: what exists, opening a namespace,
- * resolution, value, and the terms lifecycle. All five belong in the repository
- * — somebody reading the code needs the call ordering. None of the last four
- * belong on a page whose reader has not yet been told what the thing IS.
- *
- * Splitting them into two files would be two files to keep true, which is the
- * failure this page was built to avoid. One document, and the page knows where
- * a visitor stops caring.
- */
-const PAGE_ENDS_AT = "page-ends-here";
-
 export default function ProtocolPage() {
-  const all = parseMarkdown(readFileSync(DOC, "utf8"));
-
-  // From the first section heading, not from the top: the document opens with
-  // its own title and a line listing all five diagrams, which is an accurate
-  // description of the FILE and a wrong one for this page. The page says what
-  // it is itself, just below.
-  const start = all.findIndex((b) => b.kind === "heading" && b.level === 2);
-  const stop = all.findIndex(
-    (b) => b.kind === "comment" && b.text === PAGE_ENDS_AT,
-  );
-  // Missing markers show more rather than less: losing the cut is a long page,
-  // losing the document is a blank one.
-  const blocks = all.slice(
-    start === -1 ? 0 : start,
-    stop === -1 ? undefined : stop,
-  );
-
   return (
     <article className="mx-auto w-full max-w-5xl px-5 py-10 lg:px-8">
       <h1 className="text-3xl font-semibold tracking-tight text-ink">
         How it works
       </h1>
       <p className="mt-2 max-w-2xl leading-relaxed text-ink-soft">
-        A subname of a name you own, opened to a market. Here is what that
-        means, and what it is built on.
+        A subname of a name you own, opened to a market. Two pictures: what one
+        of those names is, and where the money goes.
       </p>
 
-      {/* Before anything else: a reader who leaves after four seconds should
-          still have learnt what a slot name is. The contract graph below is for
-          the ones who stay. */}
+      <h2 className="mt-10 mb-1 text-xl font-semibold tracking-tight text-ink">
+        One name, two owners
+      </h2>
+      <p className="max-w-2xl text-sm leading-relaxed text-ink-soft">
+        A slot name splits at the dot. You keep the half you registered; the
+        other half is on a market for as long as you leave it open.
+      </p>
       <SlotNameAnatomy />
 
-      {blocks.map((block, i) => {
-        switch (block.kind) {
-          case "heading":
-            return (
-              <h2
-                key={i}
-                className="mt-12 mb-3 text-xl font-semibold tracking-tight text-ink"
-              >
-                {renderInline(block.text)}
-              </h2>
-            );
+      <h2 className="mt-12 mb-1 text-xl font-semibold tracking-tight text-ink">
+        Where the money goes
+      </h2>
+      <p className="max-w-2xl text-sm leading-relaxed text-ink-soft">
+        Every holder pays tax on the price they set themselves. It accrues to
+        the namespace and leaves for whoever owns the parent name at that
+        moment — read from ENS, never stored, so selling the name sells the
+        income with it.
+      </p>
+      <MoneyFlow />
 
-          case "paragraph":
-            return (
-              <p key={i} className="my-3 leading-relaxed text-ink-soft">
-                {renderInline(block.text)}
-              </p>
-            );
-
-          case "comment":
-            return null;
-
-          case "rule":
-            // The document uses rules to separate sections, and the headings
-            // already do that here with space. Drawing both is a ladder.
-            return null;
-
-          case "code":
-            if (block.lang === "mermaid") {
-              return <Mermaid key={i} chart={block.text} />;
-            }
-            return (
-              <pre
-                key={i}
-                className="my-4 overflow-x-auto rounded-card border border-line bg-canvas px-4 py-3 font-mono text-xs leading-relaxed text-ink"
-              >
-                {block.text}
-              </pre>
-            );
-
-          case "table":
-            return (
-              <div
-                key={i}
-                className="my-5 overflow-x-auto rounded-card border border-line"
-              >
-                <table className="w-full border-collapse text-left text-sm">
-                  <thead className="bg-canvas">
-                    <tr>
-                      {block.head.map((cell, c) => (
-                        <th
-                          key={c}
-                          className="px-4 py-2.5 font-semibold whitespace-nowrap text-ink"
-                        >
-                          {renderInline(cell)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {block.rows.map((row, r) => (
-                      <tr key={r} className="border-t border-line">
-                        {row.map((cell, c) => (
-                          <td
-                            key={c}
-                            className="px-4 py-2.5 align-top leading-relaxed text-ink-soft"
-                          >
-                            {renderInline(cell)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-        }
-      })}
+      <p className="mt-10 max-w-2xl text-sm leading-relaxed text-ink-soft">
+        The contracts, the call ordering and the terms lifecycle live in{" "}
+        <a
+          href="https://github.com/nezz0746/ens-slots/blob/main/docs/protocol.md"
+          target="_blank"
+          rel="noreferrer"
+          className="text-brand underline underline-offset-2 hover:text-brand-ink"
+        >
+          docs/protocol.md
+        </a>
+        , which is the right place for them.
+      </p>
     </article>
   );
 }
