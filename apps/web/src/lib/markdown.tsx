@@ -25,7 +25,9 @@ export type Block =
   | { kind: "paragraph"; text: string }
   | { kind: "rule" }
   | { kind: "code"; lang: string; text: string }
-  | { kind: "table"; head: string[]; rows: string[][] };
+  | { kind: "table"; head: string[]; rows: string[][] }
+  /** An HTML comment. Invisible in Markdown, and a place to leave a marker. */
+  | { kind: "comment"; text: string };
 
 /** Split a Markdown document into blocks, fenced code first so nothing inside
  *  a fence is ever interpreted. */
@@ -47,6 +49,14 @@ export function parseMarkdown(src: string): Block[] {
 
     if (/^-{3,}\s*$/.test(line)) {
       blocks.push({ kind: "rule" });
+      continue;
+    }
+
+    // A single-line HTML comment. Kept as a block rather than dropped, because
+    // the page slices on one — see PAGE_ENDS_AT in the protocol route.
+    const comment = /^<!--\s*(.*?)\s*-->$/.exec(line.trim());
+    if (comment) {
+      blocks.push({ kind: "comment", text: comment[1] });
       continue;
     }
 

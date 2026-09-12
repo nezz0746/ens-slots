@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Metadata } from "next";
 
 import { Mermaid } from "@/components/mermaid";
+import { SlotNameAnatomy } from "@/components/slot-name-anatomy";
 import { parseMarkdown, renderInline } from "@/lib/markdown";
 
 /**
@@ -33,29 +34,63 @@ export const dynamic = "force-static";
 export const metadata: Metadata = {
   title: "How it works — Nameslots",
   description:
-    "The protocol in five diagrams: what exists, opening a namespace, resolution, where the value goes, and how terms change.",
+    "What a slot name is, and the three contracts behind it.",
 };
 
 const DOC = join(process.cwd(), "..", "..", "docs", "protocol.md");
 
+/**
+ * The page renders the document up to this marker and stops.
+ *
+ * ── Why a marker and not two documents ──────────────────────────────────────
+ *
+ * `docs/protocol.md` has five diagrams: what exists, opening a namespace,
+ * resolution, value, and the terms lifecycle. All five belong in the repository
+ * — somebody reading the code needs the call ordering. None of the last four
+ * belong on a page whose reader has not yet been told what the thing IS.
+ *
+ * Splitting them into two files would be two files to keep true, which is the
+ * failure this page was built to avoid. One document, and the page knows where
+ * a visitor stops caring.
+ */
+const PAGE_ENDS_AT = "page-ends-here";
+
 export default function ProtocolPage() {
-  const blocks = parseMarkdown(readFileSync(DOC, "utf8"));
+  const all = parseMarkdown(readFileSync(DOC, "utf8"));
+
+  // From the first section heading, not from the top: the document opens with
+  // its own title and a line listing all five diagrams, which is an accurate
+  // description of the FILE and a wrong one for this page. The page says what
+  // it is itself, just below.
+  const start = all.findIndex((b) => b.kind === "heading" && b.level === 2);
+  const stop = all.findIndex(
+    (b) => b.kind === "comment" && b.text === PAGE_ENDS_AT,
+  );
+  // Missing markers show more rather than less: losing the cut is a long page,
+  // losing the document is a blank one.
+  const blocks = all.slice(
+    start === -1 ? 0 : start,
+    stop === -1 ? undefined : stop,
+  );
 
   return (
-    <article className="w-full px-5 py-10 lg:px-8">
+    <article className="mx-auto w-full max-w-5xl px-5 py-10 lg:px-8">
+      <h1 className="text-3xl font-semibold tracking-tight text-ink">
+        How it works
+      </h1>
+      <p className="mt-2 max-w-2xl leading-relaxed text-ink-soft">
+        A subname of a name you own, opened to a market. Here is what that
+        means, and what it is built on.
+      </p>
+
+      {/* Before anything else: a reader who leaves after four seconds should
+          still have learnt what a slot name is. The contract graph below is for
+          the ones who stay. */}
+      <SlotNameAnatomy />
+
       {blocks.map((block, i) => {
         switch (block.kind) {
           case "heading":
-            if (block.level === 1) {
-              return (
-                <h1
-                  key={i}
-                  className="text-3xl font-semibold tracking-tight text-ink"
-                >
-                  {renderInline(block.text)}
-                </h1>
-              );
-            }
             return (
               <h2
                 key={i}
@@ -71,6 +106,9 @@ export default function ProtocolPage() {
                 {renderInline(block.text)}
               </p>
             );
+
+          case "comment":
+            return null;
 
           case "rule":
             // The document uses rules to separate sections, and the headings

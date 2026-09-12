@@ -56,6 +56,12 @@ The factory is the index because nothing else can be: an ENSv2 registry does not
 know its own name, and resolution only ever walks *down* from the root. So the
 resolver cannot ask a name which namespace it belongs to — it asks the factory.
 
+<!-- page-ends-here -->
+
+Everything below is for somebody reading the repository. The app's How it works
+page stops at the line above, deliberately: a visitor needs to know what the
+thing is, not the order in which four contracts call each other.
+
 ---
 
 ## Opening a namespace
