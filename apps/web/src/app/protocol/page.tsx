@@ -32,14 +32,15 @@ export default function ProtocolPage() {
       <h1 className="text-3xl font-semibold tracking-tight text-ink">
         How it works
       </h1>
-      <p className="mt-2 max-w-2xl leading-relaxed text-ink-soft">
-        A subname of a name you own, opened to a market. Two pictures: what one
-        of those names is, and where the money goes.
-      </p>
 
-      <h2 className="mt-10 text-xl font-semibold tracking-tight text-ink">
-        One name, two owners
+      <h2 className="mt-8 text-xl font-semibold tracking-tight text-ink">
+        What is it?
       </h2>
+      <p className="mt-2 max-w-2xl leading-relaxed text-ink-soft">
+        Nameslots lets you turn precious or specialized subnames into fairly
+        priced productive assets for your users, and revenue for you through an
+        ownership tax.
+      </p>
       <SlotNameAnatomy />
 
       <h2 className="mt-12 mb-1 text-xl font-semibold tracking-tight text-ink">
