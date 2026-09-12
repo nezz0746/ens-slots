@@ -146,7 +146,7 @@ export function NamespaceSummary({
             {isOwner ? (
               "you"
             ) : (
-              <Identity address={namespace.owner} className="align-text-bottom" />
+              <Identity address={namespace.owner} />
             )}
           </span>
         </p>

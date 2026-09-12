@@ -45,23 +45,50 @@ export function Identity({
   const showAvatar = !!avatar && !broken;
 
   return (
-    <span className={cn("inline-flex items-center gap-1.5", className)}>
-      {!showAvatar && icon}
-      {showAvatar && (
-        // Not next/image: the host is whatever the name's owner set in their
-        // avatar record, and the optimiser needs an allow-list.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={avatar}
-          alt=""
-          // Falls back to `icon`, or to nothing, rather than leaving a broken
-          // image box. Avatar records point wherever their owner liked — a host
-          // that is down, a CID nobody pins any more — and that is not
-          // something this app can fix or should apologise for; the name beside
-          // it is still perfectly good.
-          onError={() => setBroken(true)}
-          className="size-4 shrink-0 rounded-full bg-line-soft object-cover"
-        />
+    /**
+     * Inline, not flex, and that is the whole trick.
+     *
+     * This sits inside running text — "…earning 45 USDC/mo to nezzar.eth" — so
+     * the name has to sit on the SAME baseline as the words around it. An
+     * `inline-flex` wrapper cannot: its baseline is taken from its first flex
+     * item, and centring that item moves it, which left the name riding about
+     * a pixel and a half high against the rest of the sentence.
+     *
+     * Plain inline text has the paragraph's baseline for free. Only the mark
+     * beside it is a box that needs positioning, so only the mark gets a
+     * `vertical-align`, and the wrapper stays out of the way.
+     *
+     * `whitespace-nowrap` because a picture and the name it belongs to are one
+     * thing, and a narrow column should not break the line between them.
+     */
+    <span className={cn("whitespace-nowrap", className)}>
+      {(showAvatar || icon) && (
+        // -0.3em puts a 16px mark's centre on the middle of 14px text, which
+        // is where the eye expects it — `align-middle` measures from the
+        // x-height and rides visibly high.
+        <span className="mr-1.5 inline-block align-[-0.3em]">
+          {showAvatar ? (
+            // Not next/image: the host is whatever the name's owner set in
+            // their avatar record, and the optimiser needs an allow-list.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatar}
+              alt=""
+              // Falls back to `icon`, or to nothing, rather than leaving a
+              // broken image box. Avatar records point wherever their owner
+              // liked — a host that is down, a CID nobody pins any more — and
+              // that is not something this app can fix or should apologise
+              // for; the name beside it is still perfectly good.
+              onError={() => setBroken(true)}
+              // `block` so the image is not itself an inline box inside this
+              // one, which would add a descender gap under it and leave the
+              // circle looking a pixel off centre.
+              className="block size-4 rounded-full bg-line-soft object-cover"
+            />
+          ) : (
+            icon
+          )}
+        </span>
       )}
       {/* `title` so the address stays recoverable: a name is a claim about an
           address, and the person reading may want the address it maps to. */}
