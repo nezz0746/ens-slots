@@ -127,34 +127,58 @@ export function ResolutionChain() {
           </p>
           <p className="text-ink-soft">
             <ArrowRight className="mr-1 inline size-3 rotate-180 text-ink-faint" />
-            <span className="font-semibold text-hot">$120/mo in tax</span> flows
-            back the other way, and{" "}
+            <span className="font-semibold text-hot">
+              $120/mo — 5% of the $2,400 they valued it at
+            </span>{" "}
+            flows back the other way, and{" "}
             <span className="font-mono">withdraw()</span> pays whoever owns{" "}
             <span className="font-semibold text-brand">l2beat.eth</span>.
           </p>
         </div>
       </div>
 
-      {/* The empty case gets equal billing. A slot with nobody in it is the
-          state every name starts in and returns to, and a diagram that only
-          draws the happy path makes vacancy look like breakage. */}
+      {/*
+       * The empty case gets equal billing. A slot with nobody in it is the
+       * state every name starts in and returns to, and a diagram that only
+       * draws the happy path makes vacancy look like breakage.
+       *
+       * All three numbers, not just the rent. The buyout used to appear on its
+       * own — "can buy it at $2,400" — which is a figure out of nowhere unless
+       * you are already told the rate. Shown together they teach the mechanism
+       * in three lines: the holder picks the valuation, the rent is a
+       * percentage of it, and the buyout is that same valuation again.
+       */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-hot-soft bg-surface p-4">
           <p className="text-[10px] font-bold tracking-wide text-hot uppercase">
             While somebody holds it
           </p>
-          <dl className="mt-2 space-y-1 text-[12px]">
-            <div className="flex justify-between gap-3">
+          <dl className="mt-2 space-y-1.5 text-[12px]">
+            <div className="flex items-baseline justify-between gap-3">
               <dt className="text-ink-soft">addr()</dt>
               <dd className="font-mono text-ink">0xA1c4…9f2e</dd>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-ink-soft">Tax</dt>
-              <dd className="text-hot tabular-nums">$120/mo to the owner</dd>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink-soft">
+                Valuation{" "}
+                <span className="text-ink-faint">they set it themselves</span>
+              </dt>
+              <dd className="font-semibold text-ink tabular-nums">$2,400</dd>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-ink-soft">Anyone else</dt>
-              <dd className="text-ink">can buy it at $2,400</dd>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink-soft">
+                Rent <span className="text-ink-faint">5% of valuation</span>
+              </dt>
+              <dd className="font-semibold text-hot tabular-nums">$120/mo</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-1.5">
+              <dt className="text-ink-soft">
+                Buyout{" "}
+                <span className="text-ink-faint">
+                  the same number, to anyone
+                </span>
+              </dt>
+              <dd className="font-semibold text-ink tabular-nums">$2,400</dd>
             </div>
           </dl>
         </div>
@@ -163,18 +187,24 @@ export function ResolutionChain() {
           <p className="text-[10px] font-bold tracking-wide text-ink-faint uppercase">
             While it is empty
           </p>
-          <dl className="mt-2 space-y-1 text-[12px]">
-            <div className="flex justify-between gap-3">
+          <dl className="mt-2 space-y-1.5 text-[12px]">
+            <div className="flex items-baseline justify-between gap-3">
               <dt className="text-ink-soft">addr()</dt>
               <dd className="font-mono text-ink-faint">0x0 — nothing</dd>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-ink-soft">Tax</dt>
-              <dd className="text-ink-faint">none</dd>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink-soft">Valuation</dt>
+              <dd className="text-ink-faint">nobody has set one</dd>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-ink-soft">Anyone</dt>
-              <dd className="text-ink">names their own price and takes it</dd>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-ink-soft">
+                Rent <span className="text-ink-faint">set by the owner</span>
+              </dt>
+              <dd className="font-semibold text-hot tabular-nums">5%/mo</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 border-t border-line pt-1.5">
+              <dt className="text-ink-soft">Buyout</dt>
+              <dd className="text-ink">anyone names a price and takes it</dd>
             </div>
           </dl>
         </div>
