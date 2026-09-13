@@ -10,7 +10,19 @@ import { useAddresses, useIsDeployed } from "@/hooks/use-addresses";
 import { useMounted } from "@/hooks/use-mounted";
 import { cn } from "@/lib/utils";
 
-const HUNDRED = 100_000_000n; // 100 USDC, six decimals
+/**
+ * What the faucet hands out, and how the button writes it.
+ *
+ * A thousand rather than a hundred: registering a name costs single-digit
+ * USDC, but taking a slot costs its price plus an escrow, and a hundred ran
+ * out inside one demo — which reads as the app being broken rather than as
+ * the faucet being small.
+ *
+ * `1k` rather than `1000` because the button is a chip beside two other
+ * figures, and four digits in it push the wallet button off a narrow header.
+ */
+const FAUCET = 1_000_000_000n; // 1,000 USDC, six decimals
+const FAUCET_LABEL = "1k";
 
 /**
  * What you hold, and a tap to hold more.
@@ -79,14 +91,14 @@ export function UsdcWidget() {
         <button
           type="button"
           disabled={!!pending}
-          title="Mint 100 test USDC — anyone can, on either chain"
+          title="Mint 1,000 test USDC — anyone can, on either chain"
           onClick={async () => {
             if (!address) return;
             await send("mint", {
               address: addresses.mockUsdc,
               abi: mockUsdcAbi,
               functionName: "mint",
-              args: [address, HUNDRED],
+              args: [address, FAUCET],
             });
             refetch();
           }}
@@ -95,7 +107,7 @@ export function UsdcWidget() {
           )}
         >
           <Coins className="size-3" />
-          {pending === "mint" ? "…" : "+100"}
+          {pending === "mint" ? "…" : `+${FAUCET_LABEL}`}
         </button>
       )}
     </div>
