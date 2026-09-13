@@ -59,7 +59,13 @@ export async function POST(request: Request) {
     // and re-encoding it risks changing a bigint-shaped string on the way.
     return new NextResponse(await res.text(), {
       status: res.status,
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        // Explicit, though `force-dynamic` already prevents Next from caching
+        // this: a proxy in front of the app must not hold a JSON-RPC answer
+        // either. Every one of them is true for exactly one block.
+        "cache-control": "no-store",
+      },
     });
   } catch {
     return NextResponse.json(

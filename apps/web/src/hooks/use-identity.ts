@@ -35,8 +35,6 @@ export function useIdentity(address?: string): Identity {
   const { data } = useQuery({
     queryKey: ["identity", key],
     enabled: !!key,
-    staleTime: 60 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
     // Identity is decoration over an address that is already on screen, so a
     // failed lookup should fall back quietly rather than retry three times.
     retry: false,

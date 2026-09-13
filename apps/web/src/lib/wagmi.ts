@@ -92,6 +92,22 @@ export const config = createConfig({
   batch: { multicall: true },
 
   /**
+   * viem's own cache, below React Query, turned off.
+   *
+   * `cacheTime` defaults to `pollingInterval` (4s) and covers the answers viem
+   * considers safe to reuse — `eth_blockNumber` and `eth_chainId` among them.
+   * Harmless in an app that tolerates being a block behind; not in one being
+   * driven live while somebody warps anvil forward thirty days between two
+   * clicks, where a four-second-old block number is a wrong answer to "has
+   * this slot run out yet".
+   *
+   * Batching STAYS. It is not a cache — it coalesces reads issued in the same
+   * tick into one `aggregate3`, all of them fresh — and without it a namespace
+   * with eight labels is eight serial round trips.
+   */
+  cacheTime: 0,
+
+  /**
    * State that survives a reload, and is readable on the server.
    *
    * ── Why cookies and not localStorage ────────────────────────────────────

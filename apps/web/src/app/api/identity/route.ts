@@ -36,19 +36,24 @@ import { mainnet } from "viem/chains";
  * everywhere rather than an error where a name would be.
  */
 export const runtime = "nodejs";
+// Stated, not inferred. This route happens to be dynamic because it reads a
+// search param, which is a property of today's implementation rather than a
+// decision — and `/api/price` was frozen for a day by exactly that kind of
+// accident, in the other direction.
+export const dynamic = "force-dynamic";
 
 const EMPTY = { name: null, avatar: null };
 
 /**
- * Cached at the edge rather than by `export const revalidate`.
+ * Never cached, anywhere.
  *
- * That option caches Next's own `fetch` results, and viem talks to an RPC over
- * POST, which is not cached. A response header is the thing that actually
- * works here — and identity is the right shape for it: a primary name changes
- * a few times in its life, so an hour of staleness costs nothing and saves a
- * mainnet round trip on every page view.
+ * A primary name changes a few times in its life, so this is the one route
+ * where an hour of staleness genuinely costs nothing — and it is off anyway,
+ * because "no caching" is easier to trust during a demo than a list of which
+ * routes are exceptions. Restore `s-maxage` here first if the mainnet call
+ * ever needs rationing.
  */
-const CACHE = "public, s-maxage=300, stale-while-revalidate=3600";
+const CACHE = "no-store";
 
 export async function GET(request: Request) {
   const address = new URL(request.url).searchParams.get("address");

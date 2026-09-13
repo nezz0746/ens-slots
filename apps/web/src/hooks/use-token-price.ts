@@ -22,7 +22,6 @@ export function useTokenPrice(symbol = SYMBOL) {
     // Slower than the chain reads on purpose. A price that moved a cent between
     // two figures on the same screen would show them inconsistent with each
     // other, which looks like a bug and is worth less than the freshness.
-    staleTime: 60_000,
     refetchInterval: 120_000,
     queryFn: async (): Promise<number | null> => {
       const res = await fetch(`/api/price?symbol=${symbol}`);

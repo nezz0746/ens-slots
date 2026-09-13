@@ -43,7 +43,16 @@ export const runtime = "nodejs";
  * least likely to exist.
  */
 export const dynamic = "force-dynamic";
-const CACHE = "public, s-maxage=60, stale-while-revalidate=300";
+/**
+ * Never cached, anywhere.
+ *
+ * `no-store` on every response, so neither a CDN, a proxy, nor the browser
+ * keeps one. This app is demonstrated live and a cached answer during a demo
+ * reads as the app being broken, not as a saved request — and this route in
+ * particular has already served a stale `{"reason":"no key"}` for a day after
+ * the key was added, because it had been rendered once and kept.
+ */
+const CACHE = "no-store";
 
 export async function GET(request: Request) {
   const key = process.env.ALCHEMY_API_KEY;
@@ -64,7 +73,9 @@ export async function GET(request: Request) {
   try {
     const res = await fetch(
       `https://api.g.alchemy.com/prices/v1/${key}/tokens/by-symbol?symbols=${symbol}`,
-      { headers: { accept: "application/json" }, next: { revalidate: 60 } },
+      // `no-store`, not `next.revalidate`: the upstream price must be read
+      // per request too, or the route is live and its data is not.
+      { headers: { accept: "application/json" }, cache: "no-store" },
     );
     if (!res.ok)
       return NextResponse.json(

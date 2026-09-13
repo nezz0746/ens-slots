@@ -74,10 +74,6 @@ export function useOwnedNames() {
   return useQuery<OwnedName[]>({
     queryKey: ["owned-names", chainId, address],
     enabled: !!address && !!client && isDeployed,
-    // Registering a name is a deliberate act and this list only grows by one
-    // when it happens, so it does not need to be fresh by the second — but it
-    // does need to notice the name you just bought.
-    staleTime: 15_000,
     refetchInterval: 30_000,
     queryFn: async () => {
       if (!address || !client) return [];

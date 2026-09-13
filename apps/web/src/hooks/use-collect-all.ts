@@ -27,7 +27,6 @@ export function useFactorySupportsBatch() {
   const { data } = useQuery({
     queryKey: ["factory-version", addresses.slotFactory],
     enabled: !!client,
-    staleTime: Number.POSITIVE_INFINITY,
     queryFn: async () => {
       if (!client) return 0n;
       return client
