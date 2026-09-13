@@ -61,7 +61,11 @@ export function GasBalance() {
           : `${exact} ${data.symbol} available for gas`
       }
       className={cn(
-        "flex items-center gap-1 rounded-xl border px-2.5 py-1 text-[11px] tabular-nums",
+        "items-center gap-1 rounded-xl border px-2.5 py-1 text-[11px] tabular-nums",
+        // A healthy balance is a detail and the header is crowded, so it waits
+        // for room. An empty one is the reason nothing on the page works, so it
+        // shows at every width and takes the space from something else.
+        empty ? "flex" : "hidden sm:flex",
         empty
           ? "border-hot bg-hot-soft font-semibold text-hot"
           : "border-line bg-surface text-ink-soft",
