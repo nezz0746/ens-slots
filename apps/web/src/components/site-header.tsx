@@ -24,9 +24,12 @@ export function SiteHeader() {
         </Link>
 
         <nav className="ml-2 flex items-center gap-1 text-sm">
+          {/* The one action in the header, so it looks like one. "How it
+              works" beside it stays ghost — a nav item and a call to action
+              rendered identically made neither read as either. */}
           <Link href="/register">
-            <Button variant="ghost" size="sm">
-              Open one
+            <Button variant="primary" size="sm">
+              Create
             </Button>
           </Link>
           <Link href="/protocol">
