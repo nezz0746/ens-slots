@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { NamespaceRow } from "@/components/namespace-row";
+import { PoweredByEns } from "@/components/ens-mark";
 import { useNamespaces } from "@/hooks/use-namespaces";
 import { useProfiles } from "@/hooks/use-profile";
 import { useIsDeployed } from "@/hooks/use-addresses";
@@ -44,6 +45,10 @@ export default function Home() {
             Open slots and earn tax income from always-on, self-priced,
             never-squatted subnames.
           </p>
+          {/* A statement of fact rather than a badge of association: the names
+              really are ENS names and nothing here works without them. See
+              {EnsMark} for why the mark is loaded rather than drawn. */}
+          <PoweredByEns />
         </div>
 
         <Snippet />
@@ -58,15 +63,15 @@ export default function Home() {
           from the repo root.
         </Empty>
       ) : /*
-         * The skeleton also covers the PROFILE reads, not just the chain ones.
-         *
-         * They are two queries and the second cannot start until the first has
-         * returned — it is keyed by the namespaces it describes. Showing cards
-         * the moment the chain answered therefore guaranteed a frame of plain
-         * cards followed by every one of them growing by a banner, a
-         * description and a link as the ENS reads landed: roughly 180px of
-         * reflow under whatever the reader had just moved their cursor to.
-         */
+       * The skeleton also covers the PROFILE reads, not just the chain ones.
+       *
+       * They are two queries and the second cannot start until the first has
+       * returned — it is keyed by the namespaces it describes. Showing cards
+       * the moment the chain answered therefore guaranteed a frame of plain
+       * cards followed by every one of them growing by a banner, a
+       * description and a link as the ENS reads landed: roughly 180px of
+       * reflow under whatever the reader had just moved their cursor to.
+       */
       (isLoading && namespaces.length === 0) || loadingProfiles ? (
         <div className="divide-y divide-line-soft overflow-hidden rounded-[--radius-card] border border-line bg-surface">
           {[0, 1, 2, 3, 4].map((i) => (

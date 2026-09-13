@@ -132,6 +132,14 @@ provisional. Don't put anything you care about behind it.
 - **Nothing tests the web app.** No TypeScript test runner here yet, so
   `apps/web` rests on `tsc` and on being used.
 
-The app uses [ENS's palette](https://ens.domains/brand) and none of their
-marks: their guidelines require a licence and forbid implying an endorsement
-that doesn't exist. The symbol is our own.
+The app uses [ENS's palette](https://ens.domains/brand), and their mark in two
+places only: a "Powered by ENS" line under the hero, and a badge marking which
+steps of the open flow are ENS rather than ours. Both are statements of fact —
+the names really are ENS names — rather than claims of a partnership, which
+their guidelines ask third parties not to imply. The Nameslots symbol is our
+own and is never set beside theirs at the same size.
+
+The mark itself is loaded from `apps/web/public/ens-mark.svg`, and the word
+"ens" is rendered instead when that file is absent. An approximation of
+somebody else's trademark would be both wrong and still theirs, so it is never
+drawn in code.

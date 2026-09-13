@@ -7,9 +7,10 @@ import { encodeFunctionData, keccak256, toHex } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
 
 import { AcquireName } from "@/components/acquire-name";
+import { FlowStep, type StepState } from "@/components/flow-step";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import { useTx } from "@/hooks/use-tx";
 import {
   ensRegistryAbi,
@@ -69,7 +70,10 @@ export default function RegisterPage() {
 
   const [label, setLabel] = useState("");
 
-  const clean = label.trim().toLowerCase().replace(/\.eth$/, "");
+  const clean = label
+    .trim()
+    .toLowerCase()
+    .replace(/\.eth$/, "");
 
   /**
    * Whether the parent name is still unregistered.
@@ -100,7 +104,9 @@ export default function RegisterPage() {
    * Asking it about `keccak(label)` returns zero for a registered name with no
    * error at all, which would read here as "nobody owns this".
    */
-  const labelhash = clean ? (keccak256(toHex(clean)) as `0x${string}`) : undefined;
+  const labelhash = clean
+    ? (keccak256(toHex(clean)) as `0x${string}`)
+    : undefined;
   const { data: tokenId } = useReadContract({
     address: addresses.ensEthRegistry,
     abi: ensRegistryAbi,
@@ -265,6 +271,28 @@ export default function RegisterPage() {
     router.push(`/n/${namespace}`);
   }
 
+  /**
+   * Which step the visitor is actually on.
+   *
+   * Derived, never stored: every input is a live chain read, so the flow cannot
+   * disagree with the chain the way a `useState` step counter would after a
+   * refresh, an account switch, or a name bought in another tab.
+   */
+  const nameStep: StepState = !clean
+    ? "active"
+    : available === undefined
+      ? "active"
+      : "done";
+  const buyStep: StepState = !clean
+    ? "todo"
+    : needsBuying
+      ? "active"
+      : available === false
+        ? "done"
+        : "todo";
+  const openStep: StepState =
+    owned && !needsBuying ? "active" : somebodyElses ? "todo" : "todo";
+
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div>
@@ -272,15 +300,20 @@ export default function RegisterPage() {
           Open a namespace
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-          Two steps: get the <b className="font-medium text-ink">.eth</b> name
-          if you do not already have it, then open it up. Which subnames go on
-          the market is chosen afterwards, on the name&rsquo;s own page.
+          Three steps across two protocols. ENS owns the name; Nameslots opens
+          its subnames to a market. Each step below says which is which.
         </p>
       </div>
 
-      <Card className="space-y-4 p-5">
-        <div className="space-y-2">
-          <Label htmlFor="label">Your name</Label>
+      <div>
+        <FlowStep
+          index={1}
+          total={3}
+          protocol="ens"
+          title="Choose your .eth name"
+          state={nameStep}
+          summary="The name whose subnames go on the market. You keep it throughout — the namespace answers to whoever holds it."
+        >
           <div className="flex items-center gap-2">
             <Input
               id="label"
@@ -290,93 +323,101 @@ export default function RegisterPage() {
             />
             <span className="shrink-0 text-sm text-ink-faint">.eth</span>
           </div>
-        </div>
 
-        {/*
-          * Where the tax rate and the guaranteed run used to be.
-          *
-          * They were the namespace's DEFAULTS, and every label silently took
-          * them — while the form that opens labels never offered either, so a
-          * value typed once here governed every name in the namespace forever.
-          * Terms belong to the label, and are asked for where labels are
-          * opened. What is left on this page is the name itself.
-          */}
-        <p className="text-[11px] leading-relaxed text-ink-faint">
-          {somebodyElses
-            ? "That name belongs to somebody else. A namespace answers to whoever holds its parent, so this one would not be yours to run."
-            : owned
-              ? "You hold this name. Opening a namespace lets you put its subnames on the market — each on its own terms, chosen when you open it."
-              : needsBuying
-                ? "Nobody has this name yet. You will register it and open its namespace in one go."
-                : "Type a name you already hold, or one nobody has taken."}
-        </p>
-      </Card>
-
-      {/* Shown only while the name is actually unregistered. Once it is yours
-          this whole card is answered, and leaving it up put a second live
-          sequence next to the one thing left to do. */}
-      {clean && needsBuying && (
-        <AcquireName label={clean} predictRegistry={predictRegistry} />
-      )}
-
-      <Card className="space-y-3 p-5">
-        <div>
-          <p className="text-sm font-medium">
-            {needsBuying ? "Then open the namespace" : "Open the namespace"}
-          </p>
-          <p className="mt-1 text-[11px] leading-snug text-ink-faint">
-            {needsBuying
-              ? "One transaction: it deploys your subname registry, gives the namespace the two roles it needs, and sets the resolver on every subname it opens. The name you just bought is already registered to that registry."
-              : "Up to three transactions. The first deploys your subname registry and gives the namespace its roles. The second records that registry on your .eth name, so subnames resolve through it. The third sets the resolver on the name itself, so the name\u2019s own profile resolves too — skipped if it is already set. Only its owner can send the last two."}
-          </p>
-        </div>
-        <Button
-          className="w-full"
-          // Gated on the name existing. Opening a namespace under a name
-          // nobody has registered deploys a registry that no `.eth` entry can
-          // be made to point to, so it succeeds and resolves to nothing — the
-          // most expensive way this page could mislead somebody.
-          // `somebodyElses` matters as much as the rest: `open` derives the
-          // owner from the name, so this reverts for anybody who is not it —
-          // and a live button whose only outcome is a revert is worse than
-          // the message above it is good.
-          disabled={
-            !address || !clean || needsBuying || somebodyElses || !!pending
-          }
-          onClick={open}
-        >
-          {pending === "open" ? (
-            <>
-              <Loader2 className="animate-spin" />
-              Confirming…
-            </>
-          ) : pending === "point" ? (
-            <>
-              <Loader2 className="animate-spin" />
-              Recording the registry on your name…
-            </>
-          ) : pending === "resolver" ? (
-            <>
-              <Loader2 className="animate-spin" />
-              Setting the resolver on your name…
-            </>
-          ) : (
-            "Open"
+          {clean && (
+            <p
+              className={cn(
+                "mt-2 text-[11px] leading-relaxed",
+                somebodyElses ? "text-hot" : "text-ink-faint",
+              )}
+            >
+              {somebodyElses
+                ? `${clean}.eth belongs to somebody else. A namespace answers to whoever holds its parent, so this one would not be yours to run.`
+                : owned
+                  ? `You hold ${clean}.eth. Skip to step 3.`
+                  : needsBuying
+                    ? `${clean}.eth is free. Step 2 registers it to you.`
+                    : "Checking…"}
+            </p>
           )}
-        </Button>
-        {clean && needsBuying && (
-          <p className="text-center text-[11px] text-ink-faint">
-            Buy {clean}.eth above first — a namespace needs a name to sit under.
-          </p>
-        )}
-      </Card>
+        </FlowStep>
+
+        <FlowStep
+          index={2}
+          total={3}
+          protocol="ens"
+          title="Register it"
+          state={buyStep}
+          summary={
+            owned && !needsBuying
+              ? "Already done — this name is yours."
+              : "Four transactions on ENS: mint the test USDC that pays the fee, approve it, commit, then register. The commitment has to sit for a minute before the registration will take."
+          }
+        >
+          {clean && needsBuying && (
+            <AcquireName label={clean} predictRegistry={predictRegistry} />
+          )}
+        </FlowStep>
+
+        <FlowStep
+          index={3}
+          total={3}
+          protocol="nameslots"
+          title="Open the namespace"
+          state={openStep}
+          summary={
+            needsBuying
+              ? "One transaction, once the name is yours: it deploys your subname registry and gives the namespace the roles it needs. The name you just registered already points at it."
+              : "Up to three transactions. The first deploys your subname registry and gives the namespace its roles — that one is ours. The second records that registry on your .eth name and the third sets the name's own resolver; both are ENS, and only the name's owner can send them."
+          }
+        >
+          <Button
+            className="w-full"
+            // Gated on the name existing. Opening a namespace under a name
+            // nobody has registered deploys a registry that no `.eth` entry can
+            // be made to point to, so it succeeds and resolves to nothing — the
+            // most expensive way this page could mislead somebody.
+            // `somebodyElses` matters as much as the rest: `open` derives the
+            // owner from the name, so this reverts for anybody who is not it —
+            // and a live button whose only outcome is a revert is worse than
+            // the message above it is good.
+            disabled={
+              !address || !clean || needsBuying || somebodyElses || !!pending
+            }
+            onClick={open}
+          >
+            {pending === "open" ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Confirming…
+              </>
+            ) : pending === "point" ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Recording the registry on your name…
+              </>
+            ) : pending === "resolver" ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Setting the resolver on your name…
+              </>
+            ) : (
+              "Open the namespace"
+            )}
+          </Button>
+          {clean && needsBuying && (
+            <p className="mt-2 text-center text-[11px] text-ink-faint">
+              Finish step 2 first — a namespace needs a name to sit under.
+            </p>
+          )}
+        </FlowStep>
+      </div>
 
       {error && (
         <p className="rounded-xl bg-hot-soft px-4 py-3 text-xs text-hot">
           {error}
         </p>
       )}
-
     </div>
   );
 }
