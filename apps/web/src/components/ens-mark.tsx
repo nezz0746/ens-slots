@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 /**
@@ -87,20 +87,40 @@ export function EnsMark({
  * use their marks in a way that implies a partnership, and "powered by" is the
  * plainest true thing this app can say: the names really are ENS names, and
  * nothing here works without them.
+ *
+ * ── Why the dimensions are the file's own ───────────────────────────────────
+ *
+ * `ens-name.png` is 300x94. Declared as a square — `width={200} height={200}`
+ * — `next/image` reserves a square box and `object-contain` letterboxes a
+ * 3.2:1 wordmark inside it, so the logo floated in the middle of a large
+ * transparent gap and read as detached from the words beside it.
+ *
+ * Giving the real intrinsic size lets Next compute the aspect ratio, and
+ * `h-4 w-auto` then sizes it by height with the width following. No
+ * `object-contain`, because there is no longer a box to fit inside.
  */
 export function PoweredByEns({ className }: { className?: string }) {
   return (
-    <a
-      href="https://ens.domains"
-      target="_blank"
-      rel="noreferrer"
+    <div
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs text-ink-faint transition-colors hover:text-ink-soft",
+        // `items-center`, not `items-start`: the wordmark's mark rises above
+        // and drops below the lowercase letters, so aligning its TOP to the
+        // text put the whole thing low.
+        // `w-fit` so the row is as wide as its contents. A block-level
+        // div stretched to the column, which is invisible until something
+        // wants to centre it or sit beside it.
+        "flex w-fit items-center gap-1.5 text-xs text-ink-faint",
         className,
       )}
     >
       Powered by
-      <EnsMark className="h-4" />
-    </a>
+      <Image
+        src="/ens-name.png"
+        alt="ENS"
+        width={300}
+        height={94}
+        className="h-4 w-auto"
+      />
+    </div>
   );
 }
