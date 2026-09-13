@@ -83,7 +83,7 @@ export function SlotPanel({
       {/*
         * Headed by what the name COSTS, not by what you are about to do.
         *
-        * It said "Take it from them" over a form whose own button already says
+        * It said "Buy it from them" over a form whose own button already says
         * that, next to a badge about the position's funding rather than about
         * the act — a heading naming the verb and a badge naming the subject.
         * The figures underneath are current state; the rows further down are a
@@ -94,9 +94,9 @@ export function SlotPanel({
 
       <div className="space-y-4 px-4 py-4">
         {isVacant ? (
-          <TakeForm
+          <BuyForm
             subname={subname}
-            label="Take it"
+            label="Buy it"
             onDone={onDone}
             send={send}
             pending={pending}
@@ -109,9 +109,9 @@ export function SlotPanel({
             pending={pending}
           />
         ) : (
-          <TakeForm
+          <BuyForm
             subname={subname}
-            label="Take it from them"
+            label="Buy it from them"
             onDone={onDone}
             send={send}
             pending={pending}
@@ -137,7 +137,7 @@ export function SlotPanel({
  * One form for both, because the transaction is the same `buy` either way and
  * the only difference is what the valuation has to clear.
  */
-function TakeForm({
+function BuyForm({
   subname,
   label,
   onDone,
@@ -651,8 +651,8 @@ function HoldForm({
                   ? "You add — the new valuation requires it"
                   : "You add"
                 : capped
-                  ? "You take back — all the name may release"
-                  : "You take back"
+                  ? "You get back — all the name may release"
+                  : "You get back"
             }
             value={[
               formatAmount(moved),

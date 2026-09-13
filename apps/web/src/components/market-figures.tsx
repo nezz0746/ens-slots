@@ -113,7 +113,7 @@ function PendingTerms({
     <p className="rounded-xl border border-warn-soft bg-warn-soft px-3 py-2 text-[11px] leading-relaxed text-warn">
       <span className="font-semibold">Queued: {parts.join(", ")}.</span>{" "}
       {state.isVacant
-        ? "It lands on whoever takes this name."
+        ? "It lands on whoever buys this name."
         : "It does not affect the current holder — it lands at the next turnover."}
     </p>
   );
