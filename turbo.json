@@ -6,11 +6,17 @@
         "out/**",
         ".next/**",
         "!.next/cache/**"
+      ],
+      "env": [
+        "NEXT_PUBLIC_SITE_URL"
       ]
     },
     "start": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": [
+        "ALCHEMY_API_KEY"
+      ]
     },
     "test": {
       "dependsOn": [
