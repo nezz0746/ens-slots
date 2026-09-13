@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { ChainSwitch } from "@/components/chain-switch";
 import { ConnectButton } from "@/components/connect-button";
+import { GasBalance } from "@/components/gas-balance";
 import { Mark } from "@/components/mark";
 import { Button } from "@/components/ui/button";
 import { UsdcWidget } from "@/components/usdc-widget";
@@ -36,6 +37,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <GasBalance />
           <UsdcWidget />
           <ChainSwitch />
           <ConnectButton />
