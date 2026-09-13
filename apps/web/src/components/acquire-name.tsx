@@ -4,7 +4,13 @@ import { Check, Clock, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAccount, usePublicClient, useReadContract } from "wagmi";
+import {
+  useAccount,
+  useBlock,
+  useChainId,
+  usePublicClient,
+  useReadContract,
+} from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -56,6 +62,7 @@ export function AcquireName({
   predictRegistry: () => Promise<`0x${string}` | null>;
 }) {
   const { address } = useAccount();
+  const chainId = useChainId();
   const client = usePublicClient();
   const addresses = useAddresses();
   const isLocal = useIsLocal();
@@ -76,25 +83,59 @@ export function AcquireName({
    * covers it, so the registration has to repeat it exactly.
    */
   const [subregistry, setSubregistry] = useState<`0x${string}` | null>(null);
-  const [committedAt, setCommittedAt] = useState<number | null>(null);
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const [registered, setRegistered] = useState(false);
 
-  // Generated in an effect, not during render: `crypto` is not there on the
-  // server, and a value that differs between the two renders is a hydration
-  // mismatch on top of being wrong.
-  useEffect(() => {
-    if (secret) return;
-    const bytes = crypto.getRandomValues(new Uint8Array(32));
-    setSecret(
-      `0x${[...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")}`,
-    );
-  }, [secret]);
+  /**
+   * The secret survives a reload, or the commitment it hides is unrevealable.
+   *
+   * ── Why this is not just tidiness ───────────────────────────────────────
+   *
+   * A commitment is `hash(label, owner, secret, …)` and `register` must present
+   * the same secret to open it. Held only in React state, a refresh — or a tab
+   * restore, or a remount — generated a NEW one, and the commitment already
+   * paid for on chain could never be revealed by anybody, including its author.
+   * The only way forward was to commit again and wait another minute, with
+   * nothing on screen explaining why.
+   *
+   * Keyed per chain, account and name, so two names in two tabs do not share a
+   * secret and switching accounts does not inherit one. `try`/`catch` around
+   * every access: a private window with storage disabled should still be able
+   * to register a name in one sitting, which is what this degrades to.
+   */
+  const storageKey =
+    address && label
+      ? `nameslots.commit.${chainId}.${address.toLowerCase()}.${label}`
+      : null;
 
+  // In an effect, not during render: `crypto` and `localStorage` are absent on
+  // the server, and a value that differs between the two renders is a
+  // hydration mismatch on top of being wrong.
   useEffect(() => {
-    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
-    return () => clearInterval(t);
-  }, []);
+    if (!storageKey) return;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const v = JSON.parse(saved) as {
+          secret?: `0x${string}`;
+          subregistry?: `0x${string}`;
+        };
+        if (v.secret) {
+          setSecret(v.secret);
+          setSubregistry(v.subregistry ?? null);
+          return;
+        }
+      }
+    } catch {
+      // Unreadable or disabled storage falls through to a fresh secret.
+    }
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    const fresh =
+      `0x${[...bytes].map((b) => b.toString(16).padStart(2, "0")).join("")}` as const;
+    setSecret(fresh);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ secret: fresh }));
+    } catch {}
+  }, [storageKey]);
 
   const { data: available, refetch: recheck } = useReadContract({
     address: addresses.ensEthRegistrar,
@@ -163,9 +204,81 @@ export function AcquireName({
     // acknowledging it.
     await queryClient.invalidateQueries({ queryKey: ["readContracts"] });
   };
+  /**
+   * Has this commitment ripened — asked of the chain, not of this browser.
+   *
+   * ── Why not `Date.now()` ────────────────────────────────────────────────
+   *
+   * Two reasons, and the second is the one that broke.
+   *
+   * The registrar compares against `block.timestamp`. A browser clock agrees
+   * with that to within a block at best, so a countdown run locally can reach
+   * zero while the chain still refuses — and the reward for waiting patiently
+   * is a reverted `register`. On the local fork, where the dev bar warps time
+   * forward by days between two clicks, they do not agree at all.
+   *
+   * And a local timer starts at null on every mount. Reload the page and the
+   * UI concluded you had never committed, while the chain knew otherwise and
+   * had been counting the whole time.
+   *
+   * `commitmentAt` is the registrar's own record of when it accepted the
+   * commitment. It needs no memory of ours, so the step is exactly as
+   * resumable as the chain is.
+   */
+  const { data: commitment } = useReadContract({
+    address: addresses.ensEthRegistrar,
+    abi: ethRegistrarAbi,
+    functionName: "makeCommitment",
+    args:
+      address && secret && subregistry
+        ? [
+            label,
+            address,
+            secret,
+            subregistry,
+            addresses.namespaceResolver,
+            YEAR,
+            ZERO32,
+          ]
+        : undefined,
+    query: { enabled: !!address && !!secret && !!subregistry },
+  });
+
+  const { data: committedAtChain } = useReadContract({
+    address: addresses.ensEthRegistrar,
+    abi: ethRegistrarAbi,
+    functionName: "commitmentAt",
+    args: commitment ? [commitment] : undefined,
+    query: { enabled: !!commitment, refetchInterval: 4_000 },
+  });
+
+  // The chain's clock, not this machine's. `watch` keeps it moving, including
+  // across an anvil time warp, which a wall clock cannot follow.
+  const { data: block } = useBlock({ watch: true });
+
   const wait = Number(minAge ?? 60n);
-  const elapsed = committedAt ? now - committedAt : 0;
+  const committedAt =
+    committedAtChain && committedAtChain > 0n ? Number(committedAtChain) : null;
+  const chainNow = block ? Number(block.timestamp) : 0;
+  const elapsed = committedAt ? chainNow - committedAt : 0;
   const ready = committedAt !== null && elapsed >= wait;
+
+  /**
+   * Keep the subregistry beside the secret.
+   *
+   * The commitment hash is built from BOTH, so a reload that remembers only
+   * the secret still cannot rebuild the hash, and therefore cannot ask the
+   * registrar whether the commitment ripened.
+   */
+  function remember(registry: `0x${string}`) {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ secret, subregistry: registry }),
+      );
+    } catch {}
+  }
 
   async function commit() {
     if (!address || !secret || !client) return;
@@ -193,7 +306,7 @@ export function AcquireName({
     });
     if (r) {
       setSubregistry(registry);
-      setCommittedAt(Math.floor(Date.now() / 1000));
+      remember(registry);
     }
   }
 
@@ -263,7 +376,7 @@ export function AcquireName({
 
     if (ok) {
       setSubregistry(registry);
-      setCommittedAt(Math.floor(Date.now() / 1000));
+      remember(registry);
       recheckAllowance();
     }
   }
@@ -280,7 +393,9 @@ export function AcquireName({
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
       });
     }
-    setCommittedAt((c) => (c === null ? c : c - wait - 5));
+    // Nothing local to adjust any more: the countdown reads `block.timestamp`,
+    // so moving the chain moves it. `useBlock({ watch: true })` picks the new
+    // one up on the next poll.
   }
 
   if (!label) return null;
@@ -303,9 +418,7 @@ export function AcquireName({
       <div className="flex items-baseline justify-between gap-3 p-5 pb-3">
         <div>
           <p className="text-sm font-medium">{label}.eth</p>
-          <p className="mt-0.5 text-xs text-ink-faint">
-            Available · one year
-          </p>
+          <p className="mt-0.5 text-xs text-ink-faint">Available · one year</p>
         </div>
         <div className="text-right">
           <p className="text-lg font-semibold tabular-nums">
@@ -341,7 +454,9 @@ export function AcquireName({
               : "It pulls the fee from you when you register."
         }
         done={folded ? committedAt !== null : approved}
-        ready={!!address && funded && (folded ? committedAt === null : !approved)}
+        ready={
+          !!address && funded && (folded ? committedAt === null : !approved)
+        }
         blocked={
           !!address && !funded && shortfall > 0n
             ? {
@@ -354,9 +469,7 @@ export function AcquireName({
             : null
         }
         busy={pending === "approve" || batch.pending === "acquire"}
-        error={
-          pending === null && !approved ? (error ?? batch.error) : null
-        }
+        error={pending === null && !approved ? (error ?? batch.error) : null}
         onRun={async () => {
           if (batch.atomic) {
             await approveAndCommit();
@@ -380,13 +493,19 @@ export function AcquireName({
           done={committedAt !== null}
           ready={approved && committedAt === null}
           busy={pending === "commit"}
-          error={pending === null && approved && committedAt === null ? error : null}
+          error={
+            pending === null && approved && committedAt === null ? error : null
+          }
           onRun={commit}
         />
       )}
 
       <div className="flex items-center gap-3 px-5 py-3.5">
-        <Bullet n={folded ? 2 : 3} done={ready} active={committedAt !== null && !ready} />
+        <Bullet
+          n={folded ? 2 : 3}
+          done={ready}
+          active={committedAt !== null && !ready}
+        />
         <div className="flex-1">
           <p className={cn("text-sm", ready && "text-ink-faint line-through")}>
             Wait {wait} seconds
@@ -417,8 +536,6 @@ export function AcquireName({
         error={pending === null && ready && !registered ? error : null}
         onRun={register}
       />
-
-
     </Card>
   );
 }
@@ -474,14 +591,14 @@ function Step({
         )}
       </div>
       {/*
-        * A button only where there is something to press.
-        *
-        * Every step used to carry a disabled "Run", so four buttons were on
-        * screen and exactly one of them did anything — which is a puzzle, not a
-        * sequence. A step that is finished says so, a step that is waiting on an
-        * earlier one says nothing at all, and the single live button is the
-        * answer to "what do I do now".
-        */}
+       * A button only where there is something to press.
+       *
+       * Every step used to carry a disabled "Run", so four buttons were on
+       * screen and exactly one of them did anything — which is a puzzle, not a
+       * sequence. A step that is finished says so, a step that is waiting on an
+       * earlier one says nothing at all, and the single live button is the
+       * answer to "what do I do now".
+       */}
       {done ? (
         <span className="text-[11px] font-medium text-good">Done</span>
       ) : ready || busy ? (
