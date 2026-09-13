@@ -56,6 +56,28 @@ export const DEV_ACCOUNTS = [
  */
 export const metaMask = injected({ target: "metaMask" });
 
+/**
+ * Anything else that put itself in the page.
+ *
+ * ── What this adds, given discovery is already on ───────────────────────────
+ *
+ * `multiInjectedProviderDiscovery` defaults to true and is not overridden, so
+ * every wallet that announces itself over EIP-6963 — Rabby, Coinbase, Brave,
+ * Frame, Zerion — is already added at runtime and already listed. This is not
+ * for those.
+ *
+ * It is for the wallet that only sets `window.ethereum` and announces nothing:
+ * older extensions, and the in-app browsers that wrap one. Discovery never
+ * sees them, and `target: "metaMask"` rejects them, so before this they were
+ * installed, working, and offered no way in.
+ *
+ * LAST in the list on purpose. A wallet that announces AND occupies
+ * `window.ethereum` is found twice, and {ConnectButton} keeps the first of any
+ * duplicate — which should be the one that told us its name and icon, not the
+ * anonymous one.
+ */
+export const anyInjected = injected({ shimDisconnect: true });
+
 export const config = createConfig({
   chains: IS_DEV ? [anvilFork, hackathonSepolia] : [hackathonSepolia],
   connectors: IS_DEV
@@ -64,8 +86,9 @@ export const config = createConfig({
           mock({ accounts: [a.address as `0x${string}`] }),
         ),
         metaMask,
+        anyInjected,
       ]
-    : [metaMask],
+    : [metaMask, anyInjected],
   /**
    * Reads issued in the same tick go out as one `aggregate3`.
    *

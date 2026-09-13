@@ -63,17 +63,32 @@ function useAvailableConnectors() {
     let cancelled = false;
     (async () => {
       const found: Connector[] = [];
-      const seen = new Set<string>();
+      const seenName = new Set<string>();
+      /**
+       * The same wallet, reached twice.
+       *
+       * Name matching alone is not enough now that a catch-all `injected()`
+       * sits at the end of the list: it reports one wallet as "Injected" while
+       * EIP-6963 reports the same one as "MetaMask", so the names differ and
+       * both would be listed — two rows, one wallet, and picking the wrong one
+       * loses the icon and the name.
+       *
+       * Two connectors that hand back the SAME provider object are the same
+       * wallet, whatever they call it. Identity is the reliable test; the name
+       * check stays for the case where one wallet exposes two providers.
+       */
+      const seenProvider = new Set<unknown>();
       for (const c of latest.current) {
         // The fork's demo accounts are bound automatically by {useChainSigner}
         // and switched in the dev panel. They are not wallets to pick from.
         if (c.type === "mock") continue;
         const provider = await c.getProvider().catch(() => null);
         if (!provider) continue;
-        // Discovery and the declared connector can both describe one wallet.
+        if (seenProvider.has(provider)) continue;
         const name = c.name.toLowerCase();
-        if (seen.has(name)) continue;
-        seen.add(name);
+        if (seenName.has(name)) continue;
+        seenProvider.add(provider);
+        seenName.add(name);
         found.push(c);
       }
       if (cancelled) return;
@@ -238,7 +253,9 @@ function WalletIcon({ connector }: { connector: Connector }) {
   const box = "size-7 shrink-0 rounded-lg";
   if (!connector.icon)
     return (
-      <span className={cn(box, "grid place-items-center bg-canvas text-ink-faint")}>
+      <span
+        className={cn(box, "grid place-items-center bg-canvas text-ink-faint")}
+      >
         <Wallet className="size-3.5" />
       </span>
     );
